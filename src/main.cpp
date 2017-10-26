@@ -4,11 +4,11 @@
  * @author OpenCV team
  */
 
+#include <math.h>
+#include <iostream>
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
-#include <iostream>
-#include <math.h>
 
 // g++ -std=c++14 ex3_b.cpp -o app `pkg-config --cflags --libs opencv` && ./app
 
@@ -35,8 +35,7 @@ int p_trackbar = 83;
 //       beautiful code
 
 double angleBetweenTwoLines(const Point &vec1, const Point &vec2) {
-  if (vec1 == vec2)
-    return 0;
+  if (vec1 == vec2) return 0;
   double ang = acos(vec1.dot(vec2) / (norm(vec1) * norm(vec2)));
   return (ang * 180.0f) / M_PI;
 }
@@ -87,15 +86,16 @@ void Circular_hough(int, void *) {
   std::vector<Vec3f> circles;
   // runs the actual detection (1,30,100,30,70,80)
   HoughCircles(src_gray, circles, HOUGH_GRADIENT,
-               1, //
+               1,  //
                src_gray.rows / 8, cannyThreshold,
-               accumulatorThreshold, // is the aculmulator threash
-               0, 0 // change the last two parameters (min radius and max radios
-                    // ) to detect large circles
-               );
+               accumulatorThreshold,  // is the aculmulator threash
+               0,
+               0  // change the last two parameters (min radius and max radios
+                  // ) to detect large circles
+  );
 
   // clone the colour, input image for displaying purposes
-  Mat display, clock; // = src.clone();
+  Mat display, clock;  // = src.clone();
   if (circles.size() < 1) {
     return;
   }
@@ -112,7 +112,7 @@ void Circular_hough(int, void *) {
   // mask is a CV_8UC1 image with 0
   cv::Mat mask = cv::Mat::zeros(src.rows, src.cols, CV_8UC1);
   circle(mask, center, radius, Scalar(255, 255, 255), -1, 8, 0);
-  src.copyTo(clock, mask); // copy values of img to dst if mask is > 0.
+  src.copyTo(clock, mask);  // copy values of img to dst if mask is > 0.
   // ------------------------------------------------------------------
 
   // cv::Mat roi( display, cv::Rect( center.x-radius, center.y-radius, radius*2,
@@ -176,7 +176,6 @@ void Circular_hough(int, void *) {
 
   Point p1_1, p1_2, p2_1, p2_2;
   if (merged_clock_lines.size() > 0) {
-
     Vec4i l1 = merged_clock_lines[0];
 
     p1_1 = Point(l1[0], l1[1]);
@@ -197,13 +196,14 @@ void Circular_hough(int, void *) {
     line(display, p2_1, p2_2, Scalar(0, 255, 0), 3, LINE_AA);
   }
   // shows the results
-  // line(display, center, Point(center.x + radius,center.y), Scalar(0, 255, 0), 3, LINE_AA);
+  // line(display, center, Point(center.x + radius,center.y), Scalar(0, 255, 0),
+  // 3, LINE_AA);
   imshow(windowName, display);
 }
 
 int main(int argc, char **argv) {
   // Read the image
-  String imageName("../data/w.jpeg"); // by default
+  String imageName("../data/w.jpeg");  // by default
   if (argc > 1) {
     imageName = argv[1];
   }
