@@ -73,7 +73,8 @@ void clockTimeDetector(int, void *);
 vector<Circle> getCircles(ProgramData &programData);
 vector<Line> getLines(Mat &src, Mat &result, ProgramData &programData);
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
-vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines, Circle &circle, double radiusFactor);
+vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines, Circle &circle,
+                                            double radiusFactor);
 vector<Line> naiveClockHandLinesMerge(vector<Line> &clockLines);
 
 double angleBetweenTwoLines(const Point &vec1, const Point &vec2);
@@ -114,7 +115,8 @@ void clockTimeDetector(int, void *rawProgramData) {
   vector<Line> lines = getLines(grayClock, display, *programData);
   gray2bgr(display, display);
 
-  vector<Line> clockLines =  selectLinesCloseToCircleCenter(lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
+  vector<Line> clockLines = selectLinesCloseToCircleCenter(
+      lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
 
   vector<Line> mergedClockLines = naiveClockHandLinesMerge(clockLines);
 
@@ -146,7 +148,8 @@ vector<Circle> getCircles(ProgramData &programData) {
 
   std::vector<Vec3f> raw_circles;
 
-  HoughCircles(blurredImage, raw_circles, HOUGH_GRADIENT, 1, blurredImage.rows / 8, programData.houghCirclesCannyThreshold,
+  HoughCircles(blurredImage, raw_circles, HOUGH_GRADIENT, 1,
+               blurredImage.rows / 8, programData.houghCirclesCannyThreshold,
                programData.houghCirclesAccumulatorThreshold, 0, 0);
 
   vector<Circle> circles;
@@ -161,7 +164,8 @@ vector<Line> getLines(Mat &src, Mat &result, ProgramData &programData) {
   bilateralFilter(src, result, 25, 150, BORDER_DEFAULT);
   Canny(result, result, 50, 200, 3);
   vector<Vec4i> rawLines;
-  HoughLinesP(result, rawLines, 1, CV_PI / 180, programData.houghLinesPThreshold, 30, 10);
+  HoughLinesP(result, rawLines, 1, CV_PI / 180,
+              programData.houghLinesPThreshold, 30, 10);
   vector<Line> lines;
   for (auto &rawLine : rawLines) {
     lines.push_back(Line(rawLine));
@@ -171,11 +175,13 @@ vector<Line> getLines(Mat &src, Mat &result, ProgramData &programData) {
 
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
   cv::Mat mask = cv::Mat::zeros(image.rows, image.cols, CV_8UC1);
-  circle(mask, clockCircle.center, clockCircle.radius, Scalar(255, 255, 255), -1, LINE_8, 0);
+  circle(mask, clockCircle.center, clockCircle.radius, Scalar(255, 255, 255),
+         -1, LINE_8, 0);
   image.copyTo(clock, mask);
 }
 
-vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines, Circle &circle, double radiusFactor) {
+vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines, Circle &circle,
+                                            double radiusFactor) {
   double clock_radius_limit = radiusFactor * static_cast<double>(circle.radius);
   vector<Line> clockHandLines;
 
@@ -230,9 +236,7 @@ double angleBetweenTwoLines(const Point &vec1, const Point &vec2) {
   return (ang * 180.0) / M_PI;
 }
 
-void swapPoints(Line &line) {
-  swap(line.a, line.b);
-}
+void swapPoints(Line &line) { swap(line.a, line.b); }
 
 string readCommandLine(int argc, char **argv, string const &defaultImagePath) {
   string imagePath = defaultImagePath;
