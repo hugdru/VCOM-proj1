@@ -1,95 +1,81 @@
-/**
- * @file HoughCircle_Demo.cpp
- * @brief Demo code for Hough Transform
- * @author OpenCV team
- */
-
-#include <math.h>
+#include <algorithm>
+#include <cmath>
 #include <iostream>
+
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
 
-// g++ -std=c++14 ex3_b.cpp -o app `pkg-config --cflags --libs opencv` && ./app
-
 using namespace std;
 using namespace cv;
 
-// windows and trackbars name
-const std::string windowName = "Hough Circle Detection Demo";
-const std::string cannyThresholdTrackbarName = "Canny threshold";
-const std::string accumulatorThresholdTrackbarName = "Accumulator Threshold";
+const string DEFAULT_IMAGE_PATH = "../data/w.jpeg";
 
-// values and max values of the parameters of interests.
-Mat src, src_gray;
-int cannyThreshold = 131;
-int accumulatorThreshold = 100;
-const int maxAccumulatorThreshold = 200;
-const int maxCannyThreshold = 255;
+const string WINDOW_NAME = "Clock Time Detection";
+const string HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME =
+    "HoughCircles Canny Threshold";
+const string HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD_TRACKBAR_NAME =
+    "HoughCircles Accumulator Threshold";
+const string HOUGH_LINES_P_TRACKBAR_NAME = "HoughLinesP Threshold";
 
-int min_threshold = 0;
-int max_trackbar = 150;
-int p_trackbar = 83;
+constexpr int DEFAULT_HOUGH_CIRCLES_CANNY_THRESHOLD = 131;
+constexpr int MIN_HOUGH_CIRCLES_CANNY_THRESHOLD = 1;
+constexpr int MAX_HOUGH_CIRCLES_CANNY_THRESHOLD = 255;
 
-// TODO: proper error handling
-//       beautiful code
+constexpr int DEFAULT_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD = 100;
+constexpr int MIN_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD = 1;
+constexpr int MAX_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD = 255;
 
-double angleBetweenTwoLines(const Point &vec1, const Point &vec2) {
-  if (vec1 == vec2) return 0;
-  double ang = acos(vec1.dot(vec2) / (norm(vec1) * norm(vec2)));
-  return (ang * 180.0f) / M_PI;
+constexpr int DEFAULT_HOUGH_LINES_P_THRESHOLD = 83;
+constexpr int MIN_HOUGH_LINES_P_THRESHOLD = 0;
+constexpr int MAX_HOUGH_LINES_P_THRESHOLD = 155;
+
+struct ProgramData {
+  Mat image;
+  int houghCirclesCannyThreshold = DEFAULT_HOUGH_CIRCLES_CANNY_THRESHOLD;
+  int houghCirclesAccumulatorThreshold =
+      DEFAULT_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD;
+  int houghLinesPThreshold = DEFAULT_HOUGH_LINES_P_THRESHOLD;
+};
+
+string readCommandLine(int argc, char **argv, string const &defaultImagePath);
+void readImage(string &imagePath, ProgramData &programData);
+void buildGui(TrackbarCallback callback, ProgramData &programData);
+void clockTimeDetector(int, void *);
+vector<Vec4i> naiveClockHandLinesMerge(vector<Vec4i> &clock_lines);
+void swapPoints(Vec4i &line);
+double angleBetweenTwoLines(const Point &vec1, const Point &vec2);
+void convertToGray(Mat &src, Mat &dst);
+template <class T>
+constexpr const T &clamp(const T &v, const T &lo, const T &hi);
+void normalizeHoughCirclesCannyThreshold(int &value);
+void normalizeHoughCirclesAccumulatorThreshold(int &value);
+void normalizeHoughLinesPThreshold(int &value);
+
+int main(int argc, char **argv) {
+  string imagePath = readCommandLine(argc, argv, DEFAULT_IMAGE_PATH);
+  ProgramData programData = ProgramData();
+  readImage(imagePath, programData);
+  buildGui(clockTimeDetector, programData);
+  clockTimeDetector(0, &programData);
+  waitKey(0);
 }
 
-void swapPoints(Vec4i &line) {
-  auto px = line[0];
-  auto py = line[1];
-  line[0] = line[2];
-  line[1] = line[3];
-  line[2] = px;
-  line[3] = py;
-}
+void clockTimeDetector(int, void *rawprogramData) {
+  ProgramData *programData = static_cast<ProgramData *>(rawprogramData);
 
-vector<Vec4i> merge(vector<Vec4i> &clock_lines) {
-  for (size_t x = 0; x < clock_lines.size() - 1; x++) {
-    Vec4i l1 = clock_lines[x];
+  Mat grayImage;
+  convertToGray(programData->image, grayImage);
 
-    Point p1_1 = Point(l1[0], l1[1]);
-    Point p1_2 = Point(l1[2], l1[3]);
+  // Reduce the noise so we avoid false circle detection
+  GaussianBlur(grayImage, grayImage, Size(9, 9), 2, 2);
 
-    Point vec1 = p1_1 - p1_2;
-
-    for (size_t y = x + 1; y < clock_lines.size(); y++) {
-      Vec4i l2 = clock_lines[y];
-
-      Point p2_1 = Point(l2[0], l2[1]);
-      Point p2_2 = Point(l2[2], l2[3]);
-
-      Point vec2 = p2_1 - p2_2;
-
-      double ang = angleBetweenTwoLines(vec1, vec2);
-      if (ang < 5.f) {
-        double dist1 = norm(vec1);
-        double dist2 = norm(vec2);
-        if (dist1 < dist2)
-          clock_lines.erase(clock_lines.begin() + x);
-        else
-          clock_lines.erase(clock_lines.begin() + y);
-        return merge(clock_lines);
-      }
-    }
-  }
-  return clock_lines;
-}
-
-void Circular_hough(int, void *) {
-  // will hold the results of the detection
   std::vector<Vec3f> circles;
-  // runs the actual detection (1,30,100,30,70,80)
-  HoughCircles(src_gray, circles, HOUGH_GRADIENT,
+
+  HoughCircles(grayImage, circles, HOUGH_GRADIENT,
                1,  //
-               src_gray.rows / 8, cannyThreshold,
-               accumulatorThreshold,  // is the aculmulator threash
-               0,
+               grayImage.rows / 8, programData->houghCirclesCannyThreshold,
+               programData->houghCirclesAccumulatorThreshold, 0,
                0  // change the last two parameters (min radius and max radios
                   // ) to detect large circles
   );
@@ -110,9 +96,11 @@ void Circular_hough(int, void *) {
   // remove background and isolate clock
   // center and radius are the results of HoughCircle
   // mask is a CV_8UC1 image with 0
-  cv::Mat mask = cv::Mat::zeros(src.rows, src.cols, CV_8UC1);
+  cv::Mat mask =
+      cv::Mat::zeros(programData->image.rows, programData->image.cols, CV_8UC1);
   circle(mask, center, radius, Scalar(255, 255, 255), -1, 8, 0);
-  src.copyTo(clock, mask);  // copy values of img to dst if mask is > 0.
+  programData->image.copyTo(clock,
+                            mask);  // copy values of img to dst if mask is > 0.
   // ------------------------------------------------------------------
 
   // cv::Mat roi( display, cv::Rect( center.x-radius, center.y-radius, radius*2,
@@ -137,14 +125,14 @@ void Circular_hough(int, void *) {
 
   /// 2. Use Probabilistic Hough Transform
   HoughLinesP(pre_processed_img, p_lines, 1, CV_PI / 180,
-              min_threshold + p_trackbar, 30, 10);
+              programData->houghLinesPThreshold, 30, 10);
 
   // 1º filtering the vector lines (selecting only the lines near the center)
 
   // 1º ver 2 pontos da linha perto do centro and organize them (remove the rest
   // and the ones that stay are organized from center to limit of the clock
   // hand)
-  float clock_radius_limit = 0.1f * ((float)radius);
+  double clock_radius_limit = 0.1 * static_cast<double>(radius);
   vector<Vec4i> clock_lines;
 
   for (size_t x = 0; x < p_lines.size(); x++) {
@@ -169,7 +157,7 @@ void Circular_hough(int, void *) {
   // calculating angle between them (5 degres for exemple or less)
 
   // merge lines
-  vector<Vec4i> merged_clock_lines = merge(clock_lines);
+  vector<Vec4i> merged_clock_lines = naiveClockHandLinesMerge(clock_lines);
 
   /// Show the result
   cout << merged_clock_lines.size() << endl;
@@ -198,49 +186,102 @@ void Circular_hough(int, void *) {
   // shows the results
   // line(display, center, Point(center.x + radius,center.y), Scalar(0, 255, 0),
   // 3, LINE_AA);
-  imshow(windowName, display);
+  imshow(WINDOW_NAME, display);
 }
 
-int main(int argc, char **argv) {
-  // Read the image
-  String imageName("../data/w.jpeg");  // by default
+vector<Vec4i> naiveClockHandLinesMerge(vector<Vec4i> &clock_lines) {
+  for (size_t x = 0; x < clock_lines.size() - 1; x++) {
+    Vec4i l1 = clock_lines[x];
+
+    Point p1_1 = Point(l1[0], l1[1]);
+    Point p1_2 = Point(l1[2], l1[3]);
+
+    Point vec1 = p1_1 - p1_2;
+
+    for (size_t y = x + 1; y < clock_lines.size(); y++) {
+      Vec4i l2 = clock_lines[y];
+
+      Point p2_1 = Point(l2[0], l2[1]);
+      Point p2_2 = Point(l2[2], l2[3]);
+
+      Point vec2 = p2_1 - p2_2;
+
+      double ang = angleBetweenTwoLines(vec1, vec2);
+      if (ang < 5.0) {
+        double dist1 = norm(vec1);
+        double dist2 = norm(vec2);
+        if (dist1 < dist2) {
+          clock_lines.erase(clock_lines.begin() + x);
+        } else {
+          clock_lines.erase(clock_lines.begin() + y);
+        }
+        return naiveClockHandLinesMerge(clock_lines);
+      }
+    }
+  }
+  return clock_lines;
+}
+
+double angleBetweenTwoLines(const Point &vec1, const Point &vec2) {
+  if (vec1 == vec2) {
+    return 0;
+  }
+  double ang = acos(vec1.dot(vec2) / (norm(vec1) * norm(vec2)));
+  return (ang * 180.0) / M_PI;
+}
+
+void swapPoints(Vec4i &line) {
+  swap(line[0], line[2]);
+  swap(line[1], line[3]);
+}
+
+string readCommandLine(int argc, char **argv, string const &defaultImagePath) {
+  string imagePath = defaultImagePath;
   if (argc > 1) {
-    imageName = argv[1];
+    imagePath = argv[1];
   }
-  src = imread(imageName, IMREAD_COLOR);
-
-  if (src.empty()) {
-    std::cerr << "Invalid input image\n";
-    return -1;
-  }
-
-  // Convert it to gray
-  cvtColor(src, src_gray, COLOR_BGR2GRAY);
-
-  // Reduce the noise so we avoid false circle detection
-  GaussianBlur(src_gray, src_gray, Size(9, 9), 2, 2);
-
-  // create the main window, and attach the trackbars
-  namedWindow(windowName, WINDOW_AUTOSIZE);
-  createTrackbar(cannyThresholdTrackbarName, windowName, &cannyThreshold,
-                 maxCannyThreshold, Circular_hough);
-  createTrackbar(accumulatorThresholdTrackbarName, windowName,
-                 &accumulatorThreshold, maxAccumulatorThreshold,
-                 Circular_hough);
-  char thresh_label[50];
-  sprintf(thresh_label, "Thres: %d + input", min_threshold);
-  createTrackbar(thresh_label, windowName, &p_trackbar, max_trackbar,
-                 Circular_hough);
-
-  // those paramaters cannot be =0
-  // so we must check here
-  cannyThreshold = max(cannyThreshold, 1);
-  accumulatorThreshold = max(accumulatorThreshold, 1);
-
-  // initializes
-  Circular_hough(0, 0);
-  // get user key
-  waitKey(0);
-
-  return 0;
+  return imagePath;
 }
+
+void readImage(string &imagePath, ProgramData &programData) {
+  programData.image = imread(imagePath, IMREAD_COLOR);
+
+  if (programData.image.empty()) {
+    throw std::invalid_argument("Invalid Input Image");
+  }
+}
+
+void buildGui(TrackbarCallback callback, ProgramData &programData) {
+  namedWindow(WINDOW_NAME, WINDOW_AUTOSIZE);
+  createTrackbar(HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME, WINDOW_NAME,
+                 &programData.houghCirclesCannyThreshold,
+                 MAX_HOUGH_CIRCLES_CANNY_THRESHOLD, callback, &programData);
+  createTrackbar(HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD_TRACKBAR_NAME, WINDOW_NAME,
+                 &programData.houghCirclesAccumulatorThreshold,
+                 MAX_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD, callback,
+                 &programData);
+  createTrackbar(HOUGH_LINES_P_TRACKBAR_NAME, WINDOW_NAME,
+                 &programData.houghLinesPThreshold, MAX_HOUGH_LINES_P_THRESHOLD,
+                 callback, &programData);
+}
+
+void normalizeHoughCirclesCannyThreshold(int &value) {
+  clamp(value, MIN_HOUGH_CIRCLES_CANNY_THRESHOLD,
+        MAX_HOUGH_CIRCLES_CANNY_THRESHOLD);
+}
+
+void normalizeHoughCirclesAccumulatorThreshold(int &value) {
+  clamp(value, MIN_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD,
+        MAX_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD);
+}
+
+void normalizeHoughLinesPThreshold(int &value) {
+  clamp(value, MIN_HOUGH_LINES_P_THRESHOLD, MAX_HOUGH_LINES_P_THRESHOLD);
+}
+
+template <class T>
+constexpr const T &clamp(const T &v, const T &lo, const T &hi) {
+  return std::max(lo, std::min(v, hi));
+}
+
+void convertToGray(Mat &src, Mat &dst) { cvtColor(src, dst, COLOR_BGR2GRAY); }
