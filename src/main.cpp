@@ -90,11 +90,13 @@ void clockTimeDetector(int, void *);
 
 vector<Circle> getCircles(ProgramData &programData);
 
-vector<Line> getLines(Mat &src, Mat &result, ProgramData &programData);
+vector<Line> getPointerMergedLines(Mat &src, Mat &result,
+                                   ProgramData &programData,
+                                   const Circle &clockCircle);
 
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
 
-vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines, Circle &circle,
+vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,const Circle &circle,
                                             double radiusFactor);
 vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines);
 
@@ -131,7 +133,6 @@ void clockTimeDetector(int, void *rawProgramData) {
   if (circles.empty()) {
     return;
   }
-
   Circle clockCircle = circles[0];
 
   Mat clock;
@@ -140,13 +141,9 @@ void clockTimeDetector(int, void *rawProgramData) {
   bgr2gray(clock, grayClock);
 
   Mat display;
-  vector<Line> lines = getLines(grayClock, display, *programData);
+  vector<Line> mergedClockLines =
+      getPointerMergedLines(grayClock, display, *programData, clockCircle);
   gray2bgr(display, display);
-
-  vector<Line> clockLines = selectLinesCloseToCircleCenter(
-      lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
-
-  vector<Line> mergedClockLines = naiveClockPointerLinesMerge(clockLines);
 
   TimeExtracted hoursExtracted = extractTime(mergedClockLines, clockCircle);
 
@@ -175,7 +172,8 @@ void clockTimeDetector(int, void *rawProgramData) {
   limitPoint.x = clockCircle.center.x;
   limitPoint.y = clockCircle.center.y - clockCircle.radius;
   Line midNightLine = Line(clockCircle.center, limitPoint);
-  line(display, midNightLine.a, midNightLine.b, Scalar(0, 255, 255), 3, LINE_AA);
+  line(display, midNightLine.a, midNightLine.b, Scalar(0, 255, 255), 3,
+       LINE_AA);
 
   imshow(WINDOW_NAME, display);
 }
@@ -198,17 +196,34 @@ vector<Circle> getCircles(ProgramData &programData) {
   return circles;
 }
 
-vector<Line> getLines(Mat &src, Mat &result, ProgramData &programData) {
+vector<Line> getPointerMergedLines(Mat &src, Mat &result,
+                                   ProgramData &programData,
+                                   const Circle &clockCircle) {
   bilateralFilter(src, result, 25, 150, BORDER_DEFAULT);
   Canny(result, result, 50, 200, 3);
-  vector<Vec4i> rawLines;
-  HoughLinesP(result, rawLines, 1, CV_PI / 180,
-              programData.houghLinesPThreshold, 30, 10);
-  vector<Line> lines;
-  for (auto &rawLine : rawLines) {
-    lines.push_back(Line(rawLine));
-  }
-  return lines;
+
+  // TODO: improve this method (play arround with values, improve method, change
+  // the increase of threashhold and other things)
+  vector<Line> mergedClockLines;
+  int trys = 0;
+  do {
+    vector<Vec4i> rawLines;
+    HoughLinesP(result, rawLines, 1, CV_PI / 180,
+                (programData.houghLinesPThreshold + trys * 5) %
+                    MAX_HOUGH_LINES_P_THRESHOLD,
+                30, 10);
+    vector<Line> lines;
+    for (auto &rawLine : rawLines) {
+      lines.push_back(Line(rawLine));
+    }
+
+    vector<Line> clockLines = selectLinesCloseToCircleCenter(lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
+    mergedClockLines = naiveClockPointerLinesMerge(clockLines);
+    cout << "size: " << mergedClockLines.size() << endl;
+    if (mergedClockLines.size() >= 2)
+      break;
+  } while ((trys++) < 5);
+  return mergedClockLines;
 }
 
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
@@ -218,7 +233,7 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
   image.copyTo(clock, mask);
 }
 
-vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines, Circle &circle,
+vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,const Circle &circle,
                                             double radiusFactor) {
   double clock_radius_limit = radiusFactor * static_cast<double>(circle.radius);
   vector<Line> clockPointerLines;
@@ -271,9 +286,8 @@ TimeExtracted extractTime(const vector<Line> &mergedClockLines,
   if (mergedClockLines.size() <= 0)
     return TimeExtracted();
 
-  // create the mid night line to extract the angles between them
-
-  // determine mid night clock pointer to help determine the corret hour and minute
+  // determine mid night clock pointer to help determine the corret hour and
+  // minute
   Point limitPoint;
   limitPoint.x = circle.center.x;
   limitPoint.y = circle.center.y - circle.radius;
@@ -291,7 +305,8 @@ TimeExtracted extractTime(const vector<Line> &mergedClockLines,
     Point vecPointer_2 = pointer_2.b - pointer_2.a;
     double ang_2 = clockWiseAngleBetweenTwoVectors(vecReference, vecPointer_2);
 
-    // compare sizes the bigger is the minute pointer and the other de hour pointer
+    // compare sizes the bigger is the minute pointer and the other de hour
+    // pointer
     TimeExtracted time;
     double size_vec_1 = norm(vecPointer_1);
     double size_vec_2 = norm(vecPointer_2);
@@ -307,7 +322,7 @@ TimeExtracted extractTime(const vector<Line> &mergedClockLines,
                        getMinuteFromAngleDeg(ang_1));
 }
 
-// TODO: define hours and degree
+// TODO: define for hours and degree
 int getHourFromAngleDeg(double angle) { return (int)((angle * 12.0) / 360.0); }
 
 int getMinuteFromAngleDeg(double angle) {
