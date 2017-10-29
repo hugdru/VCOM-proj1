@@ -12,7 +12,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 if (WIN32)
-    set(OpenCV_DIR "./opencv/x64/vc14/lib")
+    set(OpenCV_DIR "./opencv/build/x64/vc14/lib")
 endif(WIN32)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
