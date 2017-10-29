@@ -43,21 +43,27 @@ struct ProgramData {
 
 struct Circle {
   Point center;
-  int radius;
+  double radius;
 
   explicit Circle(Vec3f &circleData) {
-    center.x = cvRound(circleData[0]);
-    center.y = cvRound(circleData[1]);
-    radius = cvRound(circleData[2]);
+    center.x = circleData[0];
+    center.y = circleData[1];
+    radius = circleData[2];
   }
 };
 
 struct Line {
-  Point a;
-  Point b;
+  Point a; // center point
+  Point b; // edge point
 
   Line() = default;
 
+  explicit Line(const Point &p1, const Point &p2) {
+    a.x = p1.x;
+    a.y = p1.y;
+    b.x = p2.x;
+    b.y = p2.y;
+  }
   explicit Line(Vec4i rawLine) {
     a.x = rawLine[0];
     a.y = rawLine[1];
@@ -66,18 +72,40 @@ struct Line {
   }
 };
 
+struct TimeExtracted {
+  int hour;
+  int minute;
+
+  TimeExtracted() : hour(0), minute(0) {}
+  explicit TimeExtracted(int h, int m) : hour(h), minute(m) {}
+};
+
 string readCommandLine(int argc, char **argv, string const &defaultImagePath);
+
 void readImage(string &imagePath, ProgramData &programData);
+
 void buildGui(TrackbarCallback callback, ProgramData &programData);
+
 void clockTimeDetector(int, void *);
+
 vector<Circle> getCircles(ProgramData &programData);
+
 vector<Line> getLines(Mat &src, Mat &result, ProgramData &programData);
+
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
+
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines, Circle &circle,
                                             double radiusFactor);
-vector<Line> naiveClockHandLinesMerge(vector<Line> &clockLines);
+vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines);
 
+TimeExtracted extractTime(const vector<Line> &mergedClockLines,
+                          const Circle &circle);
+
+ostream &operator<<(ostream &ostr, const TimeExtracted &time);
 double angleBetweenTwoLines(const Point &vec1, const Point &vec2);
+double clockWiseAngleBetweenTwoVectors(const Point &vec1, const Point &vec2);
+int getHourFromAngleDeg(double angle);
+int getMinuteFromAngleDeg(double angle);
 void bgr2gray(Mat &src, Mat &dst);
 void gray2bgr(Mat &src, Mat &dst);
 void normalizeHoughCirclesCannyThreshold(int &value);
@@ -118,10 +146,14 @@ void clockTimeDetector(int, void *rawProgramData) {
   vector<Line> clockLines = selectLinesCloseToCircleCenter(
       lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
 
-  vector<Line> mergedClockLines = naiveClockHandLinesMerge(clockLines);
+  vector<Line> mergedClockLines = naiveClockPointerLinesMerge(clockLines);
 
-  cout << mergedClockLines.size() << endl;
+  TimeExtracted hoursExtracted = extractTime(mergedClockLines, clockCircle);
 
+  cout << hoursExtracted << endl;
+
+  // show lines
+  cout << "Merged clock lines size: " << mergedClockLines.size() << endl;
   Line line0;
   Line line1;
   if (!mergedClockLines.empty()) {
@@ -138,6 +170,12 @@ void clockTimeDetector(int, void *rawProgramData) {
          << ",  ang: " << angleBetweenTwoLines(vec1, vec2) << endl;
     line(display, line1.a, line1.b, Scalar(0, 255, 0), 3, LINE_AA);
   }
+
+  Point limitPoint;
+  limitPoint.x = clockCircle.center.x;
+  limitPoint.y = clockCircle.center.y - clockCircle.radius;
+  Line midNightLine = Line(clockCircle.center, limitPoint);
+  line(display, midNightLine.a, midNightLine.b, Scalar(0, 255, 255), 3, LINE_AA);
 
   imshow(WINDOW_NAME, display);
 }
@@ -183,25 +221,24 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines, Circle &circle,
                                             double radiusFactor) {
   double clock_radius_limit = radiusFactor * static_cast<double>(circle.radius);
-  vector<Line> clockHandLines;
+  vector<Line> clockPointerLines;
 
   for (auto &line : lines) {
     Point vec1 = line.a - circle.center;
     Point vec2 = line.b - circle.center;
 
     if (norm(vec1) <= clock_radius_limit && norm(vec2) > clock_radius_limit) {
-      clockHandLines.push_back(line);
+      clockPointerLines.push_back(line);
     }
     if (norm(vec2) <= clock_radius_limit && norm(vec1) > clock_radius_limit) {
       swapPoints(line);
-      clockHandLines.push_back(line);
+      clockPointerLines.push_back(line);
     }
   }
-
-  return clockHandLines;
+  return clockPointerLines;
 }
 
-vector<Line> naiveClockHandLinesMerge(vector<Line> &clockLines) {
+vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines) {
   for (size_t x = 0; x < clockLines.size() - 1; x++) {
     Line l1 = clockLines[x];
 
@@ -221,13 +258,81 @@ vector<Line> naiveClockHandLinesMerge(vector<Line> &clockLines) {
         } else {
           clockLines.erase(clockLines.begin() + y);
         }
-        return naiveClockHandLinesMerge(clockLines);
+        return naiveClockPointerLinesMerge(clockLines);
       }
     }
   }
   return clockLines;
 }
 
+TimeExtracted extractTime(const vector<Line> &mergedClockLines,
+                          const Circle &circle) {
+  // we have 1 or two lines
+  if (mergedClockLines.size() <= 0)
+    return TimeExtracted();
+
+  // create the mid night line to extract the angles between them
+
+  // determine mid night clock pointer to help determine the corret hour and minute
+  Point limitPoint;
+  limitPoint.x = circle.center.x;
+  limitPoint.y = circle.center.y - circle.radius;
+  Line midNightLine = Line(circle.center, limitPoint);
+  Point vecReference = midNightLine.b - midNightLine.a;
+
+  // get the first clock pointer
+  Line pointer_1 = mergedClockLines[0];
+  Point vecPointer_1 = pointer_1.b - pointer_1.a;
+  double ang_1 = clockWiseAngleBetweenTwoVectors(vecReference, vecPointer_1);
+
+  if (mergedClockLines.size() >= 2) {
+    // get the secound clock pointer
+    Line pointer_2 = mergedClockLines[1];
+    Point vecPointer_2 = pointer_2.b - pointer_2.a;
+    double ang_2 = clockWiseAngleBetweenTwoVectors(vecReference, vecPointer_2);
+
+    // compare sizes the bigger is the minute pointer and the other de hour pointer
+    TimeExtracted time;
+    double size_vec_1 = norm(vecPointer_1);
+    double size_vec_2 = norm(vecPointer_2);
+
+    time.hour = getHourFromAngleDeg(size_vec_1 > size_vec_2 ? ang_2 : ang_1);
+    time.minute =
+        getMinuteFromAngleDeg(size_vec_1 > size_vec_2 ? ang_1 : ang_2);
+    return time;
+  }
+
+  // return value of only one pointer by default (clock pointer are overlaped)
+  return TimeExtracted(getHourFromAngleDeg(ang_1),
+                       getMinuteFromAngleDeg(ang_1));
+}
+
+// TODO: define hours and degree
+int getHourFromAngleDeg(double angle) { return (int)((angle * 12.0) / 360.0); }
+
+int getMinuteFromAngleDeg(double angle) {
+  return (int)((angle * 60.0) / 360.0);
+}
+
+ostream &operator<<(ostream &ostr, const TimeExtracted &time) {
+  ostr << "Hours: " << time.hour << ":" << time.minute;
+  return ostr;
+}
+
+double clockWiseAngleBetweenTwoVectors(const Point &vec1, const Point &vec2) {
+  if (vec1 == vec2) {
+    return 0;
+  }
+  double dot =
+      vec1.x * vec2.x + vec1.y * vec2.y; // dot product between vec1 and vec2
+  double det = vec1.x * vec2.y - vec1.y * vec2.x; // determinant
+  double ang = atan2(det, dot); // atan2(y, x) or atan2(sin, cos)
+  if (ang < 0)
+    ang = 2 * M_PI + ang;
+  return (ang * 180.0) / M_PI;
+}
+
+// TODO: verefi is one of the norms is zero...
 double angleBetweenTwoLines(const Point &vec1, const Point &vec2) {
   if (vec1 == vec2) {
     return 0;
