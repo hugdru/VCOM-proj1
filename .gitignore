@@ -3,6 +3,7 @@
 /cmake*/
 /bin/
 /src/app
+/opencv/
 
 # gitignore/C++.gitignore
 # Prerequisites
