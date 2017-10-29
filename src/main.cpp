@@ -96,7 +96,8 @@ vector<Line> getPointerMergedLines(Mat &src, Mat &result,
 
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
 
-vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,const Circle &circle,
+vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
+                                            const Circle &circle,
                                             double radiusFactor);
 vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines);
 
@@ -208,18 +209,20 @@ vector<Line> getPointerMergedLines(Mat &src, Mat &result,
   int trys = 0;
   do {
     vector<Vec4i> rawLines;
+    programData.houghLinesPThreshold =
+        (programData.houghLinesPThreshold + trys * 5) %
+        MAX_HOUGH_LINES_P_THRESHOLD;
     HoughLinesP(result, rawLines, 1, CV_PI / 180,
-                (programData.houghLinesPThreshold + trys * 5) %
-                    MAX_HOUGH_LINES_P_THRESHOLD,
-                30, 10);
+                programData.houghLinesPThreshold, 30, 10);
     vector<Line> lines;
     for (auto &rawLine : rawLines) {
       lines.push_back(Line(rawLine));
     }
 
-    vector<Line> clockLines = selectLinesCloseToCircleCenter(lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
+    vector<Line> clockLines = selectLinesCloseToCircleCenter(
+        lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
     mergedClockLines = naiveClockPointerLinesMerge(clockLines);
-    cout << "size: " << mergedClockLines.size() << endl;
+    cout << "try: " << trys << " - size: " << mergedClockLines.size() << endl;
     if (mergedClockLines.size() >= 2)
       break;
   } while ((trys++) < 5);
@@ -233,7 +236,8 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
   image.copyTo(clock, mask);
 }
 
-vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,const Circle &circle,
+vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
+                                            const Circle &circle,
                                             double radiusFactor) {
   double clock_radius_limit = radiusFactor * static_cast<double>(circle.radius);
   vector<Line> clockPointerLines;
