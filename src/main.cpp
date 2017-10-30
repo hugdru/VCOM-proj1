@@ -162,6 +162,7 @@ int getHourFromAngleDeg(double angle);
 int getMinuteFromAngleDeg(double angle);
 void bgr2gray(Mat &src, Mat &dst);
 void gray2bgr(Mat &src, Mat &dst);
+Scalar getDistinctColor(int index, int numberOfDistinctColors);
 void normalizeHoughCirclesCannyThreshold(int &value);
 void normalizeHoughCirclesAccumulatorThreshold(int &value);
 void normalizeHoughLinesPThreshold(int &value);
@@ -199,23 +200,12 @@ void clockTimeDetector(int, void *rawProgramData) {
 
   cout << hoursExtracted << endl;
 
-  // show lines
   cout << "Merged clock lines size: " << mergedClockLines.size() << endl;
-  Line line0;
-  Line line1;
-  if (!mergedClockLines.empty()) {
-    line0 = mergedClockLines[0];
-    line(display, line0.a, line0.b, Scalar(0, 0, 255), 3, LINE_AA);
-  }
-  if (mergedClockLines.size() > 1) {
-    line1 = mergedClockLines[1];
-
-    Point vec0 = calcLineVec(line0);
-    Point vec1 = calcLineVec(line1);
-
-    cout << "vec0: " << vec0 << ", vec1: " << vec1
-         << ",  ang: " << angleBetweenTwoLines(vec0, vec1) << endl;
-    line(display, line1.a, line1.b, Scalar(0, 255, 0), 3, LINE_AA);
+  for (int i = 0; i < mergedClockLines.size(); ++i) {
+    auto &mergedClockLine = mergedClockLines[i];
+    Scalar lineColor = getDistinctColor(i, mergedClockLines.size());
+    cout << lineColor << endl;
+    line(display, mergedClockLine.a, mergedClockLine.b, lineColor, 3, LINE_AA);
   }
 
   Point limitPoint;
@@ -226,6 +216,13 @@ void clockTimeDetector(int, void *rawProgramData) {
        LINE_AA);
 
   imshow(WINDOW_NAME, display);
+
+  if (mergedClockLines.size() == 2) {
+    Point vec0 = calcLineVec(mergedClockLines[0]);
+    Point vec1 = calcLineVec(mergedClockLines[1]);
+    cout << "vec0: " << vec0 << ", vec1: " << vec1
+         << ",  ang: " << angleBetweenTwoLines(vec0, vec1) << endl;
+  }
 }
 
 vector<Circle> getCircles(ProgramData &programData) {
@@ -579,3 +576,10 @@ constexpr const T &clamp(const T &v, const T &lo, const T &hi) {
 void bgr2gray(Mat &src, Mat &dst) { cvtColor(src, dst, COLOR_BGR2GRAY); }
 
 void gray2bgr(Mat &src, Mat &dst) { cvtColor(src, dst, COLOR_GRAY2BGR); }
+
+Scalar getDistinctColor(int index, int numberOfDistinctColors) {
+  Mat bgr;
+  Mat hsv(1, 1, CV_8UC3, Scalar(index * 179 / numberOfDistinctColors, 255, 255));
+  cvtColor(hsv, bgr, CV_HSV2BGR);
+  return Scalar(bgr.data[0], bgr.data[1], bgr.data[2]);
+}
