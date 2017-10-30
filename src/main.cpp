@@ -11,7 +11,7 @@ using namespace std;
 using namespace cv;
 
 // TODO : m.realease() in all Mat objects
-const string DEFAULT_IMAGE_PATH = "../data/w.jpeg";
+const string DEFAULT_IMAGE_PATH = "../data/clock3.JPG";
 
 const string WINDOW_NAME = "Clock Time Detection";
 const string HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME =
@@ -20,7 +20,17 @@ const string HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD_TRACKBAR_NAME =
     "HoughCircles Accumulator Threshold";
 const string HOUGH_LINES_P_TRACKBAR_NAME = "HoughLinesP Threshold";
 
-constexpr int DEFAULT_HOUGH_CIRCLES_CANNY_THRESHOLD = 131;
+const string BILATERAL_SIGMA_COLOR_TRACKBAR_NAME = "Bilateral Sigma Color";
+
+const string BILATERAL_SIGMA_SPACE_TRACKBAR_NAME = "Bilateral Sigma Space";
+
+const string CANNY_THRESHOLD1_TRACKBAR_NAME = "Canny Threshold 1";
+
+const string CANNY_THRESHOLD2_TRACKBAR_NAME = "Canny Threshold 2";
+
+const string CANNY_APERTURE_SIZE_TRACKBAR_NAME = "Canny Aperture Size";
+
+constexpr int DEFAULT_HOUGH_CIRCLES_CANNY_THRESHOLD = 60;
 constexpr int MIN_HOUGH_CIRCLES_CANNY_THRESHOLD = 1;
 constexpr int MAX_HOUGH_CIRCLES_CANNY_THRESHOLD = 255;
 
@@ -32,9 +42,19 @@ constexpr int DEFAULT_HOUGH_LINES_P_THRESHOLD = 83;
 constexpr int MIN_HOUGH_LINES_P_THRESHOLD = 0;
 constexpr int MAX_HOUGH_LINES_P_THRESHOLD = 155;
 
+constexpr int MAX_BILATERAL_SIGMA = 300;
+constexpr int DEFAULT_BILATERAL_SIGMA_COLOR = 25;
+constexpr int DEFAULT_BILATERAL_SIGMA_SPACE= 50;
+
+constexpr int MAX_CANNY_TRESHOLD = 255;
+constexpr int DEFAULT_CANNY_THRESHOLD1 = 50;
+constexpr int DEFAULT_CANNY_THRESHOLD2 = DEFAULT_CANNY_THRESHOLD1 * 4;
+constexpr int MAX_CANNY_APERTURE_SIZE = 7;
+constexpr int DEFAULT_CANNY_APERTURE_SIZE = 3;
+
 constexpr int DEFAULT_LINES_MERGE_ANGLE = 5;
 
-constexpr double LINES_SELECTION_RADIUS_FACTOR = 0.1;
+constexpr double DEFAULT_LINES_SELECTION_RADIUS_FACTOR = 0.2;
 
 struct ProgramData {
   Mat origImg;
@@ -45,6 +65,11 @@ struct ProgramData {
   int houghCirclesAccumulatorThreshold =
       DEFAULT_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD;
   int houghLinesPThreshold = DEFAULT_HOUGH_LINES_P_THRESHOLD;
+  int bilateralSigmaColor = DEFAULT_BILATERAL_SIGMA_COLOR;
+  int bilateralSigmaSpace = DEFAULT_BILATERAL_SIGMA_SPACE;
+  int cannyThreshold1 = DEFAULT_CANNY_THRESHOLD1;
+  int cannyThreshold2 = DEFAULT_CANNY_THRESHOLD2;
+  int cannyApertureSize = DEFAULT_CANNY_APERTURE_SIZE;
 };
 
 struct Circle {
@@ -100,12 +125,16 @@ void readImage(string &imagePath, ProgramData &programData);
 
 void buildGui(TrackbarCallback callback, ProgramData &programData);
 
+void createWindow(string windowName, int rows, int cols);
+
+void imageShow(string windowName, Mat &image);
+
 void clockTimeDetector(int, void *);
 
 vector<Circle> getCircles(ProgramData &programData);
 
-vector<Line> getPointerMergedLines(Mat &result, ProgramData &programData,
-                                   const Circle &clockCircle);
+vector<Line> getPointerLines(Mat &result, ProgramData &programData,
+                             const Circle &clockCircle);
 
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
 
@@ -163,7 +192,7 @@ void clockTimeDetector(int, void *rawProgramData) {
 
   Mat display;
   vector<Line> mergedClockLines =
-      getPointerMergedLines(display, *programData, clockCircle);
+      getPointerLines(display, *programData, clockCircle);
   gray2bgr(display, display);
 
   TimeExtracted hoursExtracted = extractTime(mergedClockLines, clockCircle);
@@ -216,10 +245,18 @@ vector<Circle> getCircles(ProgramData &programData) {
   return circles;
 }
 
-vector<Line> getPointerMergedLines(Mat &result, ProgramData &programData,
-                                   const Circle &clockCircle) {
-  bilateralFilter(programData.grayImageCropped, result, 25, 150, BORDER_DEFAULT);
-  Canny(result, result, 50, 200, 3);
+vector<Line> getPointerLines(Mat &result, ProgramData &programData,
+                             const Circle &clockCircle) {
+
+  imageShow("before bilateral", programData.grayImageCropped);
+
+  bilateralFilter(programData.grayImageCropped, result, programData.bilateralSigmaColor, programData.bilateralSigmaSpace, BORDER_DEFAULT);
+
+  imageShow("after bilateral", result);
+
+  Canny(result, result, programData.cannyThreshold1, programData.cannyThreshold2, programData.cannyApertureSize);
+
+  imageShow("after canny", result);
 
   // TODO: improve this method (play arround with values, improve method, change
   // the increase of threashhold and other things)
@@ -238,7 +275,7 @@ vector<Line> getPointerMergedLines(Mat &result, ProgramData &programData,
     }
 
     vector<Line> clockLines = selectLinesCloseToCircleCenter(
-        lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
+        lines, clockCircle, DEFAULT_LINES_SELECTION_RADIUS_FACTOR);
     mergedClockLines = naiveClockPointerLinesMerge(clockLines, DEFAULT_LINES_MERGE_ANGLE);
     // mergedClockLines = lineOfSymmetryClockPointerLinesMerge(clockLines, DEFAULT_LINES_MERGE_ANGLE);
     cout << "try: " << trys << " - size: " << mergedClockLines.size() << endl;
@@ -482,7 +519,9 @@ void readImage(string &imagePath, ProgramData &programData) {
 }
 
 void buildGui(TrackbarCallback callback, ProgramData &programData) {
-  namedWindow(WINDOW_NAME, WINDOW_AUTOSIZE);
+
+  createWindow(WINDOW_NAME, programData.origImg.rows, programData.origImg.cols);
+
   createTrackbar(HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME, WINDOW_NAME,
                  &programData.houghCirclesCannyThreshold,
                  MAX_HOUGH_CIRCLES_CANNY_THRESHOLD, callback, &programData);
@@ -490,9 +529,32 @@ void buildGui(TrackbarCallback callback, ProgramData &programData) {
                  &programData.houghCirclesAccumulatorThreshold,
                  MAX_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD, callback,
                  &programData);
-  createTrackbar(HOUGH_LINES_P_TRACKBAR_NAME, WINDOW_NAME,
-                 &programData.houghLinesPThreshold, MAX_HOUGH_LINES_P_THRESHOLD,
+  createTrackbar(BILATERAL_SIGMA_COLOR_TRACKBAR_NAME, WINDOW_NAME,
+                 &programData.bilateralSigmaColor, MAX_BILATERAL_SIGMA,
                  callback, &programData);
+  createTrackbar(BILATERAL_SIGMA_SPACE_TRACKBAR_NAME, WINDOW_NAME,
+                 &programData.bilateralSigmaSpace, MAX_BILATERAL_SIGMA,
+                 callback, &programData);
+  createTrackbar(CANNY_THRESHOLD1_TRACKBAR_NAME, WINDOW_NAME,
+                 &programData.cannyThreshold1, MAX_CANNY_TRESHOLD,
+                 callback, &programData);
+  createTrackbar(CANNY_THRESHOLD2_TRACKBAR_NAME, WINDOW_NAME,
+                 &programData.cannyThreshold2, MAX_CANNY_TRESHOLD,
+                 callback, &programData);
+}
+
+void createWindow(string windowName, int rows, int cols) {
+  if (rows > 600 || cols > 600) {
+    namedWindow(windowName, WINDOW_NORMAL);
+    resizeWindow(windowName, 600, 600);
+  } else {
+    namedWindow(windowName, WINDOW_AUTOSIZE);
+  }
+}
+
+void imageShow(string windowName, Mat &image) {
+  createWindow(windowName, image.rows, image.cols);
+  imshow(windowName, image);
 }
 
 void normalizeHoughCirclesCannyThreshold(int &value) {
