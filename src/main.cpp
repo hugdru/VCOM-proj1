@@ -167,6 +167,7 @@ void normalizeHoughCirclesCannyThreshold(int &value);
 void normalizeHoughCirclesAccumulatorThreshold(int &value);
 void normalizeHoughLinesPThreshold(int &value);
 void swapPoints(Line &line);
+double medianHist(Mat grayImage);
 template <class T>
 constexpr const T &clamp(const T &v, const T &lo, const T &hi);
 
@@ -497,6 +498,38 @@ Point calcPointDisplacement(Point &start, Point &displacementVector, double disp
 }
 
 void swapPoints(Line &line) { swap(line.a, line.b); }
+
+/*
+ * Calculates the median color of a image from hist
+ * TODO: Canny betweem 0.66*[median value] and 1.33*[median value]
+ */
+double medianHist(Mat grayImage)
+{
+	// Initialize parameters
+	int histSize = 256;    // bin size
+	float range[] = { 0, 255 };
+	const float *ranges[] = { range };
+
+	// Calculate histogram
+	MatND hist;
+	calcHist(&grayImage, 1, 0, Mat(), hist, 1, &histSize, ranges, true, false);
+
+	double m = grayImage.rows * grayImage.cols / 2;
+	int bin = 0;
+	double med = -1.0;
+	
+	for (int i = 0; i < histSize && med < 0.0; ++i)
+	{
+		bin += cvRound(hist.at< float >(i));
+		if (bin > m && med < 0.0)
+			med = i;
+	}
+
+	cout << "Median " << endl;
+
+	return med;
+}
+
 
 string readCommandLine(int argc, char **argv, string const &defaultImagePath) {
   string imagePath = defaultImagePath;
