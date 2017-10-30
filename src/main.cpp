@@ -31,6 +31,8 @@ constexpr int DEFAULT_HOUGH_LINES_P_THRESHOLD = 83;
 constexpr int MIN_HOUGH_LINES_P_THRESHOLD = 0;
 constexpr int MAX_HOUGH_LINES_P_THRESHOLD = 155;
 
+constexpr int DEFAULT_LINES_MERGE_ANGLE = 5;
+
 constexpr double LINES_SELECTION_RADIUS_FACTOR = 0.1;
 
 struct ProgramData {
@@ -81,6 +83,14 @@ struct TimeExtracted {
   explicit TimeExtracted(int h, int m) : hour(h), minute(m) {}
 };
 
+enum class SegmentsType {
+  COLLINEAR_OVERLAPPING,
+  COLLINEAR_DISJOINT,
+  PARALLEL,
+  SEGMENTS_INTERSECTING,
+  SEGMENTS_NOT_INTERSECTING
+};
+
 string readCommandLine(int argc, char **argv, string const &defaultImagePath);
 
 void readImage(string &imagePath, ProgramData &programData);
@@ -100,13 +110,22 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
                                             const Circle &circle,
                                             double radiusFactor);
-vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines);
+vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle);
+vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle);
 
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
                           const Circle &circle);
 
 ostream &operator<<(ostream &ostr, const TimeExtracted &time);
 double angleBetweenTwoLines(const Point &vec1, const Point &vec2);
+// https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
+SegmentsType segmentsAnalysis(Line &line1, Line &line2, Point &intersectingPoint);
+bool intervalsIntersect(double t0, double t1, double x0, double x1);
+double crossProduct2d(Point &vec1, Point &vec2);
+bool doubleIsZero(double value, double interval);
+bool doubleEquality(double value, double reference, double interval);
+Point calcLineVec(Line &line);
+Point calcPointDisplacement(Point &start, Point &displacementVector, double displacementFactor, Point &displacedPoint);
 double clockWiseAngleBetweenTwoVectors(const Point &vec1, const Point &vec2);
 int getHourFromAngleDeg(double angle);
 int getMinuteFromAngleDeg(double angle);
@@ -162,11 +181,11 @@ void clockTimeDetector(int, void *rawProgramData) {
   if (mergedClockLines.size() > 1) {
     line1 = mergedClockLines[1];
 
-    Point vec1 = line0.a - line0.b;
-    Point vec2 = line1.a - line1.b;
+    Point vec0 = calcLineVec(line0);
+    Point vec1 = calcLineVec(line1);
 
-    cout << "vec1: " << vec1 << ", vec2: " << vec2
-         << ",  ang: " << angleBetweenTwoLines(vec1, vec2) << endl;
+    cout << "vec0: " << vec0 << ", vec1: " << vec1
+         << ",  ang: " << angleBetweenTwoLines(vec0, vec1) << endl;
     line(display, line1.a, line1.b, Scalar(0, 255, 0), 3, LINE_AA);
   }
 
@@ -222,7 +241,8 @@ vector<Line> getPointerMergedLines(Mat &src, Mat &result,
 
     vector<Line> clockLines = selectLinesCloseToCircleCenter(
         lines, clockCircle, LINES_SELECTION_RADIUS_FACTOR);
-    mergedClockLines = naiveClockPointerLinesMerge(clockLines);
+    mergedClockLines = naiveClockPointerLinesMerge(clockLines, DEFAULT_LINES_MERGE_ANGLE);
+    // mergedClockLines = lineOfSymmetryClockPointerLinesMerge(clockLines, DEFAULT_LINES_MERGE_ANGLE);
     cout << "try: " << trys << " - size: " << mergedClockLines.size() << endl;
     if (mergedClockLines.size() >= 2)
       break;
@@ -258,19 +278,19 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
   return clockPointerLines;
 }
 
-vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines) {
+vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle) {
   for (size_t x = 0; x < clockLines.size() - 1; x++) {
     Line l1 = clockLines[x];
 
-    Point vec1 = l1.a - l1.b;
+    Point vec1 = calcLineVec(l1);
 
     for (size_t y = x + 1; y < clockLines.size(); y++) {
       Line l2 = clockLines[y];
 
-      Point vec2 = l2.a - l2.b;
+      Point vec2 = calcLineVec(l2);
 
       double ang = angleBetweenTwoLines(vec1, vec2);
-      if (ang < 5.0) {
+      if (ang < linesMergeAngle) {
         double dist1 = norm(vec1);
         double dist2 = norm(vec2);
         if (dist1 < dist2) {
@@ -278,11 +298,15 @@ vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines) {
         } else {
           clockLines.erase(clockLines.begin() + y);
         }
-        return naiveClockPointerLinesMerge(clockLines);
+        return naiveClockPointerLinesMerge(clockLines, linesMergeAngle);
       }
     }
   }
   return clockLines;
+}
+
+
+vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle) {
 }
 
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
@@ -343,12 +367,12 @@ double clockWiseAngleBetweenTwoVectors(const Point &vec1, const Point &vec2) {
   if (vec1 == vec2) {
     return 0;
   }
-  double dot =
-      vec1.x * vec2.x + vec1.y * vec2.y; // dot product between vec1 and vec2
+  double dot = vec1.dot(vec2);
   double det = vec1.x * vec2.y - vec1.y * vec2.x; // determinant
   double ang = atan2(det, dot); // atan2(y, x) or atan2(sin, cos)
-  if (ang < 0)
+  if (ang < 0) {
     ang = 2 * M_PI + ang;
+  }
   return (ang * 180.0) / M_PI;
 }
 
@@ -359,6 +383,72 @@ double angleBetweenTwoLines(const Point &vec1, const Point &vec2) {
   }
   double ang = acos(vec1.dot(vec2) / (norm(vec1) * norm(vec2)));
   return (ang * 180.0) / M_PI;
+}
+
+SegmentsType segmentsAnalysis(Line &line1, Line &line2, Point &intersectingPoint) {
+  double doubleEqualityInterval = 1e-8;
+  Point q = line2.a;
+  Point p = line1.a;
+  Point qMp = q - p;
+  Point r = calcLineVec(line1);
+  Point s = calcLineVec(line2);
+  double rXs = crossProduct2d(r, s);
+  double qMpXr = crossProduct2d(qMp, r);
+
+  if (doubleIsZero(rXs, doubleEqualityInterval) && doubleIsZero(qMpXr, doubleEqualityInterval)) {
+    double rN = norm(r);
+    double rNSquared = rN * rN;
+    double t0 = qMp.dot(r) / rNSquared;
+    double t1 = t0 + s.dot(r) / rNSquared;
+    if (s.dot(r) < 0) {
+     swap(t0, t1);
+    }
+    if (intervalsIntersect(t0, t1, 0, 1)) {
+      return SegmentsType::COLLINEAR_OVERLAPPING;
+    } else {
+      return SegmentsType::COLLINEAR_DISJOINT;
+    }
+  }
+
+  if (doubleIsZero(rXs, doubleEqualityInterval) && !doubleIsZero(qMpXr, doubleEqualityInterval)) {
+    return SegmentsType::PARALLEL;
+  }
+
+  if (!doubleIsZero(rXs, doubleEqualityInterval)) {
+    double t = crossProduct2d(qMp, s) / rXs;
+    double u = qMpXr / rXs;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+      calcPointDisplacement(p, r, t, intersectingPoint);
+      return SegmentsType::SEGMENTS_INTERSECTING;
+    }
+  }
+
+  return SegmentsType::SEGMENTS_NOT_INTERSECTING;
+}
+
+bool intervalsIntersect(double t0, double t1, double x0, double x1) {
+  return max(t0, x0) <= min(t1, x1);
+}
+
+double crossProduct2d(Point &vec1, Point &vec2) {
+  return vec1.x * vec2.y - vec1.y * vec2.x;
+}
+
+Point calcLineVec(Line &line) {
+  return line.b - line.a;
+}
+
+bool doubleIsZero(double value, double interval) {
+  return doubleEquality(value, 0, interval);
+}
+
+bool doubleEquality(double value, double reference, double interval) {
+  return value > reference - interval && value < reference + interval;
+}
+
+Point calcPointDisplacement(Point &start, Point &displacementVector, double displacementFactor, Point &displacedPoint) {
+  displacedPoint.x = start.x + displacementVector.x * displacementFactor;
+  displacedPoint.y = start.y + displacementVector.y * displacementFactor;
 }
 
 void swapPoints(Line &line) { swap(line.a, line.b); }
