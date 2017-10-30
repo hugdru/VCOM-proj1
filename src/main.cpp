@@ -1,4 +1,3 @@
-#define _USE_MATH_DEFINES
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -10,6 +9,7 @@
 using namespace std;
 using namespace cv;
 
+// TODO : m.realease() in all Mat objects
 const string DEFAULT_IMAGE_PATH = "../data/w.jpeg";
 
 const string WINDOW_NAME = "Clock Time Detection";
@@ -36,8 +36,10 @@ constexpr int DEFAULT_LINES_MERGE_ANGLE = 5;
 constexpr double LINES_SELECTION_RADIUS_FACTOR = 0.1;
 
 struct ProgramData {
-  Mat image;
+  Mat origImg;
   Mat grayImage;
+  Mat imgCropped;
+  Mat grayImageCropped;
   int houghCirclesCannyThreshold = DEFAULT_HOUGH_CIRCLES_CANNY_THRESHOLD;
   int houghCirclesAccumulatorThreshold =
       DEFAULT_HOUGH_CIRCLES_ACCUMULATOR_THRESHOLD;
@@ -101,8 +103,7 @@ void clockTimeDetector(int, void *);
 
 vector<Circle> getCircles(ProgramData &programData);
 
-vector<Line> getPointerMergedLines(Mat &src, Mat &result,
-                                   ProgramData &programData,
+vector<Line> getPointerMergedLines(Mat &result, ProgramData &programData,
                                    const Circle &clockCircle);
 
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
@@ -156,14 +157,12 @@ void clockTimeDetector(int, void *rawProgramData) {
   }
   Circle clockCircle = circles[0];
 
-  Mat clock;
-  isolateClock(clockCircle, programData->image, clock);
-  Mat grayClock;
-  bgr2gray(clock, grayClock);
+  isolateClock(clockCircle, programData->origImg, programData->imgCropped);
+  bgr2gray(programData->imgCropped, programData->grayImageCropped);
 
   Mat display;
   vector<Line> mergedClockLines =
-      getPointerMergedLines(grayClock, display, *programData, clockCircle);
+      getPointerMergedLines(display, *programData, clockCircle);
   gray2bgr(display, display);
 
   TimeExtracted hoursExtracted = extractTime(mergedClockLines, clockCircle);
@@ -213,14 +212,12 @@ vector<Circle> getCircles(ProgramData &programData) {
   for (auto &raw_circle : raw_circles) {
     circles.push_back(Circle(raw_circle));
   }
-
   return circles;
 }
 
-vector<Line> getPointerMergedLines(Mat &src, Mat &result,
-                                   ProgramData &programData,
+vector<Line> getPointerMergedLines(Mat &result, ProgramData &programData,
                                    const Circle &clockCircle) {
-  bilateralFilter(src, result, 25, 150, BORDER_DEFAULT);
+  bilateralFilter(programData.grayImageCropped, result, 25, 150, BORDER_DEFAULT);
   Canny(result, result, 50, 200, 3);
 
   // TODO: improve this method (play arround with values, improve method, change
@@ -254,7 +251,19 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
   cv::Mat mask = cv::Mat::zeros(image.rows, image.cols, CV_8UC1);
   circle(mask, clockCircle.center, clockCircle.radius, Scalar(255, 255, 255),
          -1, LINE_8, 0);
-  image.copyTo(clock, mask);
+  Mat temp;
+  image.copyTo(temp, mask);
+
+  // Setup a rectangle to define your region of interest
+  cv::Rect myROI(clockCircle.center.x - clockCircle.radius,
+                 clockCircle.center.y - clockCircle.radius,
+                 2 * clockCircle.radius, 2 * clockCircle.radius);
+  clockCircle.center.x = clockCircle.radius;
+  clockCircle.center.y = clockCircle.radius;
+
+  // Crop the full image to that image contained by the rectangle myROI
+  // Note that this doesn't copy the data
+  clock = temp(myROI);
 }
 
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
@@ -279,12 +288,13 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
 }
 
 vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle) {
-  for (size_t x = 0; x < clockLines.size() - 1; x++) {
+  int size = clockLines.size();
+  for (int x = 0; x < size - 1; x++) {
     Line l1 = clockLines[x];
 
     Point vec1 = calcLineVec(l1);
 
-    for (size_t y = x + 1; y < clockLines.size(); y++) {
+    for (int y = x + 1; y < size; y++) {
       Line l2 = clockLines[y];
 
       Point vec2 = calcLineVec(l2);
@@ -462,10 +472,10 @@ string readCommandLine(int argc, char **argv, string const &defaultImagePath) {
 }
 
 void readImage(string &imagePath, ProgramData &programData) {
-  programData.image = imread(imagePath, IMREAD_COLOR);
-  bgr2gray(programData.image, programData.grayImage);
+  programData.origImg = imread(imagePath, IMREAD_COLOR);
+  bgr2gray(programData.origImg, programData.grayImage);
 
-  if (programData.image.empty()) {
+  if (programData.origImg.empty()) {
     throw std::invalid_argument("Invalid Input Image");
   }
 }
