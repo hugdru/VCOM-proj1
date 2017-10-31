@@ -274,7 +274,8 @@ vector<Line> getPointerLines(Mat &result, ProgramData &programData,
 
     vector<Line> clockLines = selectLinesCloseToCircleCenter(
         lines, clockCircle, DEFAULT_LINES_SELECTION_RADIUS_FACTOR);
-    mergedClockLines = naiveClockPointerLinesMerge(clockLines, DEFAULT_LINES_MERGE_ANGLE);
+    mergedClockLines = clockLines;
+//    mergedClockLines = naiveClockPointerLinesMerge(clockLines, DEFAULT_LINES_MERGE_ANGLE);
     // mergedClockLines = lineOfSymmetryClockPointerLinesMerge(clockLines, DEFAULT_LINES_MERGE_ANGLE);
     cout << "try: " << trys << " - size: " << mergedClockLines.size() << endl;
     if (mergedClockLines.size() >= 2)
