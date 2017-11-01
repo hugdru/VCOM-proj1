@@ -289,11 +289,15 @@ vector<Line> getPointerLines(Mat &result, ProgramData &programData,
       lines.push_back(Line(rawLine));
     }
 
-    vector<Line> clockLines = selectLinesCloseToCircleCenter(
+    mergedClockLines = selectLinesCloseToCircleCenter(
         lines, clockCircle, DEFAULT_LINES_SELECTION_RADIUS_FACTOR);
 
+    cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after selectLinesCloseToCircleCenter" << endl;
+
     mergedClockLines = lineOfSymmetryClockPointerLinesMerge(
-        clockLines, DEFAULT_LINES_MERGE_ANGLE, clockCircle.radius  * programData.doubleEqualityIntervalRadiusPercentage / 100);
+        mergedClockLines, DEFAULT_LINES_MERGE_ANGLE, clockCircle.radius  * programData.doubleEqualityIntervalRadiusPercentage / 100);
+
+    cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after lineOfSymmetryClockPointerLinesMerge" << endl;
 
     if (rawLines.size() >= 2) break;
   } while (++tries < 5);
@@ -363,7 +367,7 @@ vector<Line> joinCollinearLines(vector<Line> &clockLines, double doubleEqualityI
       Line l2 = clockLines[y];
       Point2d intersectingPoint;
       SegmentsType segmentsType = segmentsAnalysis(l1, l2, intersectingPoint, doubleEqualityInterval);
-      cout << "line" << x << ":" << "line" << y << " - " << static_cast<int>(segmentsType) << endl;
+      cout << "line" << x << getDistinctColor(x, clockLinesSize) << ":" << "line" << y << getDistinctColor(y, clockLinesSize) << " - " << static_cast<int>(segmentsType) << endl;
 
       switch (segmentsType) {
         case SegmentsType::COLLINEAR_OVERLAPPING: {
@@ -378,10 +382,10 @@ vector<Line> joinCollinearLines(vector<Line> &clockLines, double doubleEqualityI
       }
     }
     if (!l1CollinearWithSomeLine) {
-      result.push_back(l1);
     }
   }
-  return result;
+  // For testing
+  return clockLines;
 }
 
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
