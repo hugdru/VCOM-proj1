@@ -54,7 +54,7 @@ constexpr int DEFAULT_CANNY_THRESHOLD2 = DEFAULT_CANNY_THRESHOLD1 * 4;
 constexpr int MAX_CANNY_APERTURE_SIZE = 7;
 constexpr int DEFAULT_CANNY_APERTURE_SIZE = 3;
 
-constexpr int DEFAULT_LINES_MERGE_ANGLE = 5;
+constexpr double DEFAULT_LINES_MERGE_ANGLE = 0.0874f; //5º rad, temp to sec 0.045f
 
 constexpr double DEFAULT_LINES_SELECTION_RADIUS_FACTOR = 0.2;
 
@@ -112,9 +112,11 @@ struct Line {
 struct TimeExtracted {
   int hour;
   int minute;
+  int secs;
 
-  TimeExtracted() : hour(0), minute(0) {}
-  explicit TimeExtracted(int h, int m) : hour(h), minute(m) {}
+  TimeExtracted() : hour(0), minute(0), secs(0) {}
+  explicit TimeExtracted(int h, int m) : hour(h), minute(m),secs(0) {}
+  explicit TimeExtracted(int h, int m, int s) : hour(h), minute(m), secs(s) {}
 };
 
 enum class SegmentsType {
@@ -147,7 +149,7 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
                                             const Circle &circle,
                                             double radiusFactor);
-vector<Line> clockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle, Circle &clockCircle);
+vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAngle,const Circle &clockCircle);
 
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
                           const Circle &circle);
@@ -167,7 +169,7 @@ void calcPointDisplacement(Point2d &start, Point2d &displacementVector,
 double clockWiseAngleBetweenTwoVectors(const Point2d &vec1,
                                        const Point2d &vec2);
 int getHourFromAngleDeg(double angle);
-int getMinuteFromAngleDeg(double angle);
+int getMinuteSecFromAngleDeg(double angle);
 void bgr2gray(Mat &src, Mat &dst);
 void gray2bgr(Mat &src, Mat &dst);
 Scalar getDistinctColor(size_t index, size_t numberOfDistinctColors);
@@ -241,6 +243,7 @@ vector<Circle> getCircles(ProgramData &programData) {
 
 	std::vector<Vec3f> raw_circles;
 
+  /*
 	Mat canny_output;
 	int thresh = 200;
 	vector<vector<Point> > contours;
@@ -275,9 +278,9 @@ vector<Circle> getCircles(ProgramData &programData) {
 	bgr2gray(drawing, drawing);
 	namedWindow("Contours2", CV_WINDOW_AUTOSIZE);
 	imshow("Contours2", drawing);
-
-	HoughCircles(drawing, raw_circles, HOUGH_GRADIENT, 2,
-		blurredImage.rows / 4, programData.houghCirclesCannyThreshold,
+*/
+	HoughCircles(blurredImage, raw_circles, HOUGH_GRADIENT, 1,
+		blurredImage.rows / 8, programData.houghCirclesCannyThreshold,
 		programData.houghCirclesAccumulatorThreshold, 0, 0);
 
 	vector<Circle> circles;
@@ -298,7 +301,7 @@ vector<Line> getPointerLines(Mat &result, ProgramData &programData,
 
   imageShow("after bilateral", result);
 
-  Canny(result, result, programData.cannyThreshold1,
+  Canny(programData.grayImageCropped, result, programData.cannyThreshold1,
         programData.cannyThreshold2, programData.cannyApertureSize);
 
   imageShow("after canny", result);
@@ -329,7 +332,7 @@ vector<Line> getPointerLines(Mat &result, ProgramData &programData,
 
     cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after selectLinesCloseToCircleCenter" << endl;
 
-    //mergedClockLines = clockPointerLinesMerge(mergedClockLines, DEFAULT_LINES_MERGE_ANGLE, circle);
+    mergedClockLines = clockPointerLinesMerge(mergedClockLines, DEFAULT_LINES_MERGE_ANGLE, clockCircle);
 
     cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after lineOfSymmetryClockPointerLinesMerge" << endl;
 
@@ -380,42 +383,47 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
   return clockPointerLines;
 }
 
-vector<Line> clockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle, Circle &clockCircle) {
+vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAngle,const Circle &clockCircle) {
   vector<Line> result;
 
-  size_t clockLinesSize = clockLines.size();
-  if (clockLinesSize == 0) {
+  if (clockLines.size() == 0) {
     return result;
   }
 
-  for (size_t x = 0; x < clockLinesSize - 1; x++) {
+  for (size_t x = 0; x < clockLines.size() - 1; x++) {
     Line l1 = clockLines[x];
 
-    Point vec1 = calcLineVec(l1);
+    Point2d vec1 = calcLineVec(l1);
 
-    bool l1Merged = false;
-    for (size_t y = x + 1; y < clockLinesSize; y++) {
+    double maxNorm = norm(vec1);
+    double counter = 1.0; 
+    Point2d vectorRes = vec1;
+    for (size_t y = x + 1; y < clockLines.size(); y++) {
       Line l2 = clockLines[y];
 
-      Point vec2 = calcLineVec(l2);
+      Point2d vec2 = calcLineVec(l2);
 
       double vec1Vec2Angle = angleBetweenTwoLines(vec1, vec2, false);
+      cout << x << " - " << vec1Vec2Angle << " - " << linesMergeAngle << endl;
       if (vec1Vec2Angle < linesMergeAngle) {
-        l1Merged = true;
-        double maxNorm = max(norm(vec1), norm(vec2));
-        double newLineAngle = vec1Vec2Angle/2;
-        auto newPointB = Point2d(maxNorm * cos(newLineAngle), maxNorm * sin(newLineAngle));
-        Line newLine(clockCircle.center, newPointB);
-        if (result.size() > x) {
-          result[x] = newLine;
-        } else {
-          result.push_back(newLine);
-        }
+        cout << x << " - joined " << endl;
+        maxNorm = max(maxNorm, norm(vec2));
+        vectorRes += vec2;
+        counter+=1.0f;
+        
+        clockLines.erase(clockLines.begin() + y);
+        y--;        
+      }else{
+        cout << x << " - passed " << endl;
       }
     }
-    if (!l1Merged) {
-      result.push_back(l1);
-    }
+    Point2d avgVec = (vectorRes / counter);
+    Point2d avgVecBigger = avgVec * (maxNorm / norm(avgVec));
+
+    Line clockAvgPointer(clockCircle.center, clockCircle.center + avgVecBigger);
+    result.push_back(clockAvgPointer);
+    if (clockLines.size() == 0)
+      break;
   }
   return result;
 }
@@ -451,14 +459,12 @@ TimeExtracted extractTime(const vector<Line> &mergedClockLines,
     double size_vec_2 = norm(vecPointer_2);
 
     time.hour = getHourFromAngleDeg(size_vec_1 > size_vec_2 ? ang_2 : ang_1);
-    time.minute =
-        getMinuteFromAngleDeg(size_vec_1 > size_vec_2 ? ang_1 : ang_2);
+    time.minute = getMinuteSecFromAngleDeg(size_vec_1 > size_vec_2 ? ang_1 : ang_2);
     return time;
   }
 
   // return value of only one pointer by default (clock pointer are overlaped)
-  return TimeExtracted(getHourFromAngleDeg(ang_1),
-                       getMinuteFromAngleDeg(ang_1));
+  return TimeExtracted(getHourFromAngleDeg(ang_1), getMinuteSecFromAngleDeg(ang_1));
 }
 
 // TODO: define for hours and degree
@@ -466,12 +472,12 @@ int getHourFromAngleDeg(double angle) {
   return static_cast<int>((angle * 12.0) / 360.0);
 }
 
-int getMinuteFromAngleDeg(double angle) {
+int getMinuteSecFromAngleDeg(double angle) {
   return static_cast<int>((angle * 60.0) / 360.0);
 }
 
 ostream &operator<<(ostream &ostr, const TimeExtracted &time) {
-  ostr << "Hours: " << time.hour << ":" << time.minute;
+  ostr << "Hours: " << time.hour << ":" << time.minute << ":" << time.secs;
   return ostr;
 }
 
