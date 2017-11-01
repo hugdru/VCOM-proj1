@@ -30,6 +30,8 @@ const string CANNY_THRESHOLD2_TRACKBAR_NAME = "Canny Threshold 2";
 
 const string CANNY_APERTURE_SIZE_TRACKBAR_NAME = "Canny Aperture Size";
 
+const string DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE_TRACKBAR_NAME = "Double Equality Interval Radius Percentage";
+
 constexpr int DEFAULT_HOUGH_CIRCLES_CANNY_THRESHOLD = 60;
 constexpr int MIN_HOUGH_CIRCLES_CANNY_THRESHOLD = 1;
 constexpr int MAX_HOUGH_CIRCLES_CANNY_THRESHOLD = 255;
@@ -56,6 +58,9 @@ constexpr int DEFAULT_LINES_MERGE_ANGLE = 5;
 
 constexpr double DEFAULT_LINES_SELECTION_RADIUS_FACTOR = 0.2;
 
+constexpr int MAX_DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE = 100;
+constexpr int DEFAULT_DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE = 15;
+
 struct ProgramData {
   Mat origImg;
   Mat grayImage;
@@ -70,6 +75,7 @@ struct ProgramData {
   int cannyThreshold1 = DEFAULT_CANNY_THRESHOLD1;
   int cannyThreshold2 = DEFAULT_CANNY_THRESHOLD2;
   int cannyApertureSize = DEFAULT_CANNY_APERTURE_SIZE;
+  int doubleEqualityIntervalRadiusPercentage = DEFAULT_DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE;
 };
 
 struct Circle {
@@ -141,11 +147,9 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
                                             const Circle &circle,
                                             double radiusFactor);
-vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines,
-                                         int linesMergeAngle);
-vector<Line> joinCollinearLines(vector<Line> &clockLines);
+vector<Line> joinCollinearLines(vector<Line> &clockLines, double doubleEqualityInterval);
 vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines,
-                                                  int linesMergeAngle);
+                                                  int linesMergeAngle, double doubleEqualityInterval);
 
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
                           const Circle &circle);
@@ -154,7 +158,7 @@ ostream &operator<<(ostream &ostr, const TimeExtracted &time);
 double angleBetweenTwoLines(const Point2d &vec1, const Point2d &vec2);
 // https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
 SegmentsType segmentsAnalysis(Line &line1, Line &line2,
-                              Point2d &intersectingPoint);
+                              Point2d &intersectingPoint, double doubleEqualityInterval);
 bool intervalsIntersect(double t0, double t1, double x0, double x1);
 double crossProduct2d(Point2d &vec1, Point2d &vec2);
 bool doubleIsZero(double value, double interval);
@@ -205,13 +209,13 @@ void clockTimeDetector(int, void *rawProgramData) {
 
   TimeExtracted hoursExtracted = extractTime(mergedClockLines, clockCircle);
 
-  cout << hoursExtracted << endl;
+  cout << endl <<  hoursExtracted << endl;
 
-  cout << "Merged clock lines size: " << mergedClockLines.size() << endl;
+  cout << endl << "nergedClockLines.size() = " << mergedClockLines.size() << endl;
   for (size_t i = 0; i < mergedClockLines.size(); ++i) {
     auto &mergedClockLine = mergedClockLines[i];
     Scalar lineColor = getDistinctColor(i, mergedClockLines.size());
-    cout << lineColor << endl;
+    cout << "line" << i << " - " << lineColor << endl;
     line(display, mergedClockLine.a, mergedClockLine.b, lineColor, 3, LINE_AA);
   }
 
@@ -264,30 +268,36 @@ vector<Line> getPointerLines(Mat &result, ProgramData &programData,
 
   imageShow("after canny", result);
 
-  // TODO: improve this method (play arround with values, improve method, change
-  // the increase of threashhold and other things)
+  // TODO: improve this method (play around with values, improve method, change
+  // the increase of threshold and other things
+  vector<Vec4d> rawLines;
   vector<Line> mergedClockLines;
-  int trys = 0;
+  int tries = 0;
+  cout << endl;
   do {
-    vector<Vec4i> rawLines;
     programData.houghLinesPThreshold =
-        (programData.houghLinesPThreshold + trys * 5) %
+        (programData.houghLinesPThreshold + tries * 5) %
         MAX_HOUGH_LINES_P_THRESHOLD;
     HoughLinesP(result, rawLines, 1, CV_PI / 180,
                 programData.houghLinesPThreshold, 30, 10);
+
+    cout << "try: " << tries << ", rawLines.size() = " << rawLines.size() << endl;
+
     vector<Line> lines;
+
     for (auto &rawLine : rawLines) {
       lines.push_back(Line(rawLine));
     }
 
     vector<Line> clockLines = selectLinesCloseToCircleCenter(
         lines, clockCircle, DEFAULT_LINES_SELECTION_RADIUS_FACTOR);
-    mergedClockLines = clockLines;
+
     mergedClockLines = lineOfSymmetryClockPointerLinesMerge(
-        clockLines, DEFAULT_LINES_MERGE_ANGLE);
-    cout << "try: " << trys << " - size: " << mergedClockLines.size() << endl;
-    if (mergedClockLines.size() >= 2) break;
-  } while ((trys++) < 5);
+        clockLines, DEFAULT_LINES_MERGE_ANGLE, clockCircle.radius  * programData.doubleEqualityIntervalRadiusPercentage / 100);
+
+    if (rawLines.size() >= 2) break;
+  } while (++tries < 5);
+
   return mergedClockLines;
 }
 
@@ -314,7 +324,7 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
                                             const Circle &circle,
                                             double radiusFactor) {
-  double clock_radius_limit = radiusFactor * static_cast<double>(circle.radius);
+  double clock_radius_limit = radiusFactor * circle.radius;
   vector<Line> clockPointerLines;
 
   for (auto &line : lines) {
@@ -332,46 +342,13 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
   return clockPointerLines;
 }
 
-vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines,
-                                         int linesMergeAngle) {
-  size_t clockLinesSize = clockLines.size();
-  if (clockLinesSize == 0) {
-    return clockLines;
-  }
-
-  for (size_t x = 0; x < clockLinesSize - 1; x++) {
-    Line l1 = clockLines[x];
-
-    Point2d vec1 = calcLineVec(l1);
-
-    for (size_t y = x + 1; y < clockLinesSize; y++) {
-      Line l2 = clockLines[y];
-
-      Point2d vec2 = calcLineVec(l2);
-
-      double ang = angleBetweenTwoLines(vec1, vec2);
-      if (ang < linesMergeAngle) {
-        double dist1 = norm(vec1);
-        double dist2 = norm(vec2);
-        if (dist1 < dist2) {
-          clockLines.erase(clockLines.begin() + x);
-        } else {
-          clockLines.erase(clockLines.begin() + y);
-        }
-        return naiveClockPointerLinesMerge(clockLines, linesMergeAngle);
-      }
-    }
-  }
-  return clockLines;
-}
-
 vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines,
-                                                  int linesMergeAngle) {
-  vector<Line> newClockLines = joinCollinearLines(clockLines);
+                                                  int linesMergeAngle, double doubleEqualityInterval) {
+  vector<Line> newClockLines = joinCollinearLines(clockLines, doubleEqualityInterval);
   return newClockLines;
 }
 
-vector<Line> joinCollinearLines(vector<Line> &clockLines) {
+vector<Line> joinCollinearLines(vector<Line> &clockLines, double doubleEqualityInterval) {
   vector<Line> result;
 
   size_t clockLinesSize = clockLines.size();
@@ -385,8 +362,9 @@ vector<Line> joinCollinearLines(vector<Line> &clockLines) {
     for (size_t y = x + 1; y < clockLinesSize; y++) {
       Line l2 = clockLines[y];
       Point2d intersectingPoint;
-      SegmentsType segmentsType = segmentsAnalysis(l1, l2, intersectingPoint);
-      cout << "**** " << static_cast<int>(segmentsType) << " ****" << endl;
+      SegmentsType segmentsType = segmentsAnalysis(l1, l2, intersectingPoint, doubleEqualityInterval);
+      cout << "line" << x << ":" << "line" << y << " - " << static_cast<int>(segmentsType) << endl;
+
       switch (segmentsType) {
         case SegmentsType::COLLINEAR_OVERLAPPING: {
           l1CollinearWithSomeLine = true;
@@ -485,8 +463,7 @@ double angleBetweenTwoLines(const Point2d &vec1, const Point2d &vec2) {
 }
 
 SegmentsType segmentsAnalysis(Line &line1, Line &line2,
-                              Point2d &intersectingPoint) {
-  double doubleEqualityInterval = 1e-8;
+                              Point2d &intersectingPoint, double doubleEqualityInterval) {
   Point2d q = line2.a;
   Point2d p = line1.a;
   Point2d qMp = q - p;
@@ -621,6 +598,9 @@ void buildGui(TrackbarCallback callback, ProgramData &programData) {
                  &programData);
   createTrackbar(CANNY_THRESHOLD2_TRACKBAR_NAME, WINDOW_NAME,
                  &programData.cannyThreshold2, MAX_CANNY_TRESHOLD, callback,
+                 &programData);
+  createTrackbar(DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE_TRACKBAR_NAME, WINDOW_NAME,
+                 &programData.doubleEqualityIntervalRadiusPercentage, MAX_DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE, callback,
                  &programData);
 }
 
