@@ -44,7 +44,7 @@ constexpr int MAX_HOUGH_LINES_P_THRESHOLD = 155;
 
 constexpr int MAX_BILATERAL_SIGMA = 300;
 constexpr int DEFAULT_BILATERAL_SIGMA_COLOR = 25;
-constexpr int DEFAULT_BILATERAL_SIGMA_SPACE= 50;
+constexpr int DEFAULT_BILATERAL_SIGMA_SPACE = 50;
 
 constexpr int MAX_CANNY_TRESHOLD = 255;
 constexpr int DEFAULT_CANNY_THRESHOLD1 = 50;
@@ -84,8 +84,8 @@ struct Circle {
 };
 
 struct Line {
-  Point2d a; // center point
-  Point2d b; // edge point
+  Point2d a;  // center point
+  Point2d b;  // edge point
 
   Line() = default;
 
@@ -141,9 +141,11 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
                                             const Circle &circle,
                                             double radiusFactor);
-vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle);
+vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines,
+                                         int linesMergeAngle);
 vector<Line> joinCollinearLines(vector<Line> &clockLines);
-vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle);
+vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines,
+                                                  int linesMergeAngle);
 
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
                           const Circle &circle);
@@ -151,14 +153,17 @@ TimeExtracted extractTime(const vector<Line> &mergedClockLines,
 ostream &operator<<(ostream &ostr, const TimeExtracted &time);
 double angleBetweenTwoLines(const Point2d &vec1, const Point2d &vec2);
 // https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
-SegmentsType segmentsAnalysis(Line &line1, Line &line2, Point2d &intersectingPoint);
+SegmentsType segmentsAnalysis(Line &line1, Line &line2,
+                              Point2d &intersectingPoint);
 bool intervalsIntersect(double t0, double t1, double x0, double x1);
 double crossProduct2d(Point2d &vec1, Point2d &vec2);
 bool doubleIsZero(double value, double interval);
 bool doubleEquality(double value, double reference, double interval);
 Point2d calcLineVec(Line &line);
-void calcPointDisplacement(Point2d &start, Point2d &displacementVector, double displacementFactor, Point2d &displacedPoint);
-double clockWiseAngleBetweenTwoVectors(const Point2d &vec1, const Point2d &vec2);
+void calcPointDisplacement(Point2d &start, Point2d &displacementVector,
+                           double displacementFactor, Point2d &displacedPoint);
+double clockWiseAngleBetweenTwoVectors(const Point2d &vec1,
+                                       const Point2d &vec2);
 int getHourFromAngleDeg(double angle);
 int getMinuteFromAngleDeg(double angle);
 void bgr2gray(Mat &src, Mat &dst);
@@ -246,14 +251,16 @@ vector<Circle> getCircles(ProgramData &programData) {
 
 vector<Line> getPointerLines(Mat &result, ProgramData &programData,
                              const Circle &clockCircle) {
-
   imageShow("before bilateral", programData.grayImageCropped);
 
-  bilateralFilter(programData.grayImageCropped, result, programData.bilateralSigmaColor, programData.bilateralSigmaSpace, BORDER_DEFAULT);
+  bilateralFilter(programData.grayImageCropped, result,
+                  programData.bilateralSigmaColor,
+                  programData.bilateralSigmaSpace, BORDER_DEFAULT);
 
   imageShow("after bilateral", result);
 
-  Canny(result, result, programData.cannyThreshold1, programData.cannyThreshold2, programData.cannyApertureSize);
+  Canny(result, result, programData.cannyThreshold1,
+        programData.cannyThreshold2, programData.cannyApertureSize);
 
   imageShow("after canny", result);
 
@@ -276,10 +283,10 @@ vector<Line> getPointerLines(Mat &result, ProgramData &programData,
     vector<Line> clockLines = selectLinesCloseToCircleCenter(
         lines, clockCircle, DEFAULT_LINES_SELECTION_RADIUS_FACTOR);
     mergedClockLines = clockLines;
-     mergedClockLines = lineOfSymmetryClockPointerLinesMerge(clockLines, DEFAULT_LINES_MERGE_ANGLE);
+    mergedClockLines = lineOfSymmetryClockPointerLinesMerge(
+        clockLines, DEFAULT_LINES_MERGE_ANGLE);
     cout << "try: " << trys << " - size: " << mergedClockLines.size() << endl;
-    if (mergedClockLines.size() >= 2)
-      break;
+    if (mergedClockLines.size() >= 2) break;
   } while ((trys++) < 5);
   return mergedClockLines;
 }
@@ -294,8 +301,8 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
 
   // Setup a rectangle to define your region of interest
   cv::Rect2d myROI(clockCircle.center.x - clockCircle.radius,
-                 clockCircle.center.y - clockCircle.radius,
-                 2.0 * clockCircle.radius, 2.0 * clockCircle.radius);
+                   clockCircle.center.y - clockCircle.radius,
+                   2.0 * clockCircle.radius, 2.0 * clockCircle.radius);
   clockCircle.center.x = clockCircle.radius;
   clockCircle.center.y = clockCircle.radius;
 
@@ -325,7 +332,8 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
   return clockPointerLines;
 }
 
-vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle) {
+vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines,
+                                         int linesMergeAngle) {
   size_t clockLinesSize = clockLines.size();
   if (clockLinesSize == 0) {
     return clockLines;
@@ -357,10 +365,10 @@ vector<Line> naiveClockPointerLinesMerge(vector<Line> &clockLines, int linesMerg
   return clockLines;
 }
 
-vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle) {
+vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines,
+                                                  int linesMergeAngle) {
   vector<Line> newClockLines = joinCollinearLines(clockLines);
   return newClockLines;
-
 }
 
 vector<Line> joinCollinearLines(vector<Line> &clockLines) {
@@ -377,7 +385,7 @@ vector<Line> joinCollinearLines(vector<Line> &clockLines) {
     for (size_t y = x + 1; y < clockLinesSize; y++) {
       Line l2 = clockLines[y];
       Point2d intersectingPoint;
-      SegmentsType segmentsType = segmentsAnalysis(l1, l2,  intersectingPoint);
+      SegmentsType segmentsType = segmentsAnalysis(l1, l2, intersectingPoint);
       cout << "**** " << static_cast<int>(segmentsType) << " ****" << endl;
       switch (segmentsType) {
         case SegmentsType::COLLINEAR_OVERLAPPING: {
@@ -388,8 +396,7 @@ vector<Line> joinCollinearLines(vector<Line> &clockLines) {
           l1CollinearWithSomeLine = true;
           break;
         }
-        default: {
-        }
+        default: {}
       }
     }
     if (!l1CollinearWithSomeLine) {
@@ -402,8 +409,7 @@ vector<Line> joinCollinearLines(vector<Line> &clockLines) {
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
                           const Circle &circle) {
   // we have 1 or two lines
-  if (mergedClockLines.size() <= 0)
-    return TimeExtracted();
+  if (mergedClockLines.size() <= 0) return TimeExtracted();
 
   // determine mid night clock pointer to help determine the corret hour and
   // minute
@@ -442,7 +448,9 @@ TimeExtracted extractTime(const vector<Line> &mergedClockLines,
 }
 
 // TODO: define for hours and degree
-int getHourFromAngleDeg(double angle) { return static_cast<int>((angle * 12.0) / 360.0); }
+int getHourFromAngleDeg(double angle) {
+  return static_cast<int>((angle * 12.0) / 360.0);
+}
 
 int getMinuteFromAngleDeg(double angle) {
   return static_cast<int>((angle * 60.0) / 360.0);
@@ -453,13 +461,14 @@ ostream &operator<<(ostream &ostr, const TimeExtracted &time) {
   return ostr;
 }
 
-double clockWiseAngleBetweenTwoVectors(const Point2d &vec1, const Point2d &vec2) {
+double clockWiseAngleBetweenTwoVectors(const Point2d &vec1,
+                                       const Point2d &vec2) {
   if (vec1 == vec2) {
     return 0;
   }
   double dot = vec1.dot(vec2);
-  double det = vec1.x * vec2.y - vec1.y * vec2.x; // determinant
-  double ang = atan2(det, dot); // atan2(y, x) or atan2(sin, cos)
+  double det = vec1.x * vec2.y - vec1.y * vec2.x;  // determinant
+  double ang = atan2(det, dot);  // atan2(y, x) or atan2(sin, cos)
   if (ang < 0) {
     ang = 2 * M_PI + ang;
   }
@@ -475,7 +484,8 @@ double angleBetweenTwoLines(const Point2d &vec1, const Point2d &vec2) {
   return (ang * 180.0) / M_PI;
 }
 
-SegmentsType segmentsAnalysis(Line &line1, Line &line2, Point2d &intersectingPoint) {
+SegmentsType segmentsAnalysis(Line &line1, Line &line2,
+                              Point2d &intersectingPoint) {
   double doubleEqualityInterval = 1e-8;
   Point2d q = line2.a;
   Point2d p = line1.a;
@@ -485,13 +495,14 @@ SegmentsType segmentsAnalysis(Line &line1, Line &line2, Point2d &intersectingPoi
   double rXs = crossProduct2d(r, s);
   double qMpXr = crossProduct2d(qMp, r);
 
-  if (doubleIsZero(rXs, doubleEqualityInterval) && doubleIsZero(qMpXr, doubleEqualityInterval)) {
+  if (doubleIsZero(rXs, doubleEqualityInterval) &&
+      doubleIsZero(qMpXr, doubleEqualityInterval)) {
     double rN = norm(r);
     double rNSquared = rN * rN;
     double t0 = qMp.dot(r) / rNSquared;
     double t1 = t0 + s.dot(r) / rNSquared;
     if (s.dot(r) < 0) {
-     swap(t0, t1);
+      swap(t0, t1);
     }
     if (intervalsIntersect(t0, t1, 0, 1)) {
       return SegmentsType::COLLINEAR_OVERLAPPING;
@@ -500,7 +511,8 @@ SegmentsType segmentsAnalysis(Line &line1, Line &line2, Point2d &intersectingPoi
     }
   }
 
-  if (doubleIsZero(rXs, doubleEqualityInterval) && !doubleIsZero(qMpXr, doubleEqualityInterval)) {
+  if (doubleIsZero(rXs, doubleEqualityInterval) &&
+      !doubleIsZero(qMpXr, doubleEqualityInterval)) {
     return SegmentsType::PARALLEL;
   }
 
@@ -524,9 +536,7 @@ double crossProduct2d(Point2d &vec1, Point2d &vec2) {
   return vec1.x * vec2.y - vec1.y * vec2.x;
 }
 
-Point2d calcLineVec(Line &line) {
-  return line.b - line.a;
-}
+Point2d calcLineVec(Line &line) { return line.b - line.a; }
 
 bool doubleIsZero(double value, double interval) {
   return doubleEquality(value, 0, interval);
@@ -536,7 +546,8 @@ bool doubleEquality(double value, double reference, double interval) {
   return value > reference - interval && value < reference + interval;
 }
 
-void calcPointDisplacement(Point2d &start, Point2d &displacementVector, double displacementFactor, Point2d &displacedPoint) {
+void calcPointDisplacement(Point2d &start, Point2d &displacementVector,
+                           double displacementFactor, Point2d &displacedPoint) {
   displacedPoint.x = start.x + displacementVector.x * displacementFactor;
   displacedPoint.y = start.y + displacementVector.y * displacementFactor;
 }
@@ -547,33 +558,30 @@ void swapPoints(Line &line) { swap(line.a, line.b); }
  * Calculates the median color of a image from hist
  * TODO: Canny betweem 0.66*[median value] and 1.33*[median value]
  */
-double medianHist(Mat grayImage)
-{
-	// Initialize parameters
-	int histSize = 256;    // bin size
-	float range[] = { 0, 255 };
-	const float *ranges[] = { range };
+double medianHist(Mat grayImage) {
+  // Initialize parameters
+  int histSize = 256;  // bin size
+  float range[] = {0, 255};
+  const float *ranges[] = {range};
 
-	// Calculate histogram
-	MatND hist;
-	calcHist(&grayImage, 1, nullptr, Mat(), hist, 1, &histSize, ranges, true, false);
+  // Calculate histogram
+  MatND hist;
+  calcHist(&grayImage, 1, nullptr, Mat(), hist, 1, &histSize, ranges, true,
+           false);
 
-	double m = grayImage.rows * grayImage.cols / 2;
-	int bin = 0;
-	double med = -1.0;
-	
-	for (int i = 0; i < histSize && med < 0.0; ++i)
-	{
-		bin += cvRound(hist.at< float >(i));
-		if (bin > m && med < 0.0)
-			med = i;
-	}
+  double m = grayImage.rows * grayImage.cols / 2;
+  int bin = 0;
+  double med = -1.0;
 
-	cout << "Median " << endl;
+  for (int i = 0; i < histSize && med < 0.0; ++i) {
+    bin += cvRound(hist.at<float>(i));
+    if (bin > m && med < 0.0) med = i;
+  }
 
-	return med;
+  cout << "Median " << endl;
+
+  return med;
 }
-
 
 string readCommandLine(int argc, char **argv, string const &defaultImagePath) {
   string imagePath = defaultImagePath;
@@ -593,7 +601,6 @@ void readImage(string &imagePath, ProgramData &programData) {
 }
 
 void buildGui(TrackbarCallback callback, ProgramData &programData) {
-
   createWindow(WINDOW_NAME, programData.origImg.rows, programData.origImg.cols);
 
   createTrackbar(HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME, WINDOW_NAME,
@@ -610,11 +617,11 @@ void buildGui(TrackbarCallback callback, ProgramData &programData) {
                  &programData.bilateralSigmaSpace, MAX_BILATERAL_SIGMA,
                  callback, &programData);
   createTrackbar(CANNY_THRESHOLD1_TRACKBAR_NAME, WINDOW_NAME,
-                 &programData.cannyThreshold1, MAX_CANNY_TRESHOLD,
-                 callback, &programData);
+                 &programData.cannyThreshold1, MAX_CANNY_TRESHOLD, callback,
+                 &programData);
   createTrackbar(CANNY_THRESHOLD2_TRACKBAR_NAME, WINDOW_NAME,
-                 &programData.cannyThreshold2, MAX_CANNY_TRESHOLD,
-                 callback, &programData);
+                 &programData.cannyThreshold2, MAX_CANNY_TRESHOLD, callback,
+                 &programData);
 }
 
 void createWindow(string windowName, int rows, int cols) {
@@ -656,7 +663,9 @@ void gray2bgr(Mat &src, Mat &dst) { cvtColor(src, dst, COLOR_GRAY2BGR); }
 
 Scalar getDistinctColor(size_t index, size_t numberOfDistinctColors) {
   Mat bgr;
-  Mat hsv(1, 1, CV_8UC3, Scalar(static_cast<double>(index * 179 / numberOfDistinctColors), 255, 255));
+  Mat hsv(1, 1, CV_8UC3,
+          Scalar(static_cast<double>(index * 179 / numberOfDistinctColors), 255,
+                 255));
   cvtColor(hsv, bgr, CV_HSV2BGR);
   return Scalar(bgr.data[0], bgr.data[1], bgr.data[2]);
 }
