@@ -235,20 +235,57 @@ void clockTimeDetector(int, void *rawProgramData) {
 }
 
 vector<Circle> getCircles(ProgramData &programData) {
-  Mat blurredImage;
-  GaussianBlur(programData.grayImage, blurredImage, Size(9, 9), 2, 2);
+	
+	Mat blurredImage;
+	GaussianBlur(programData.grayImage, blurredImage, Size(9, 9), 2, 2);
 
-  std::vector<Vec3f> raw_circles;
+	std::vector<Vec3f> raw_circles;
 
-  HoughCircles(blurredImage, raw_circles, HOUGH_GRADIENT, 1,
-               blurredImage.rows / 8, programData.houghCirclesCannyThreshold,
-               programData.houghCirclesAccumulatorThreshold, 0, 0);
+	Mat canny_output;
+	int thresh = 200;
+	vector<vector<Point> > contours;
+	vector<Vec4i> hierarchy;
+	/// Detect edges using canny
+	Canny(programData.grayImage, canny_output, thresh, thresh * 2, 3);
+	
+	/// Find contours
+	findContours(canny_output, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+	/// Draw contours
+	Mat drawing = Mat::zeros(programData.grayImage.size(), CV_8UC3);
 
-  vector<Circle> circles;
-  for (auto &raw_circle : raw_circles) {
-    circles.push_back(Circle(raw_circle));
-  }
-  return circles;
+	RNG rng(12345);
+	vector<Point> approx;
+	cout << "con " << contours.size() << endl;
+
+	for (int i = 0; i< contours.size(); i++)
+	{
+		Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+
+		approxPolyDP(contours[i], approx, 0.01*arcLength(contours[i], true), true);
+		//drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
+		if (approx.size() > 15) {
+			drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
+		}
+	}
+
+	/// Show in a window
+	namedWindow("Contours", CV_WINDOW_AUTOSIZE);
+	imshow("Contours", drawing);
+
+	bgr2gray(drawing, drawing);
+	namedWindow("Contours2", CV_WINDOW_AUTOSIZE);
+	imshow("Contours2", drawing);
+
+	HoughCircles(drawing, raw_circles, HOUGH_GRADIENT, 2,
+		blurredImage.rows / 4, programData.houghCirclesCannyThreshold,
+		programData.houghCirclesAccumulatorThreshold, 0, 0);
+
+	vector<Circle> circles;
+	for (auto &raw_circle : raw_circles) {
+		circles.push_back(Circle(raw_circle));
+	}
+	cout << "circles " << circles.size() << endl;
+	return circles;
 }
 
 vector<Line> getPointerLines(Mat &result, ProgramData &programData,
