@@ -301,7 +301,7 @@ vector<Line> getPointerLines(Mat &result, ProgramData &programData,
 
   imageShow("after bilateral", result);
 
-  Canny(programData.grayImageCropped, result, programData.cannyThreshold1,
+  Canny(result, result, programData.cannyThreshold1,
         programData.cannyThreshold2, programData.cannyApertureSize);
 
   imageShow("after canny", result);
