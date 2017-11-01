@@ -147,15 +147,13 @@ void isolateClock(Circle &clockCircle, Mat &image, Mat &clock);
 vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
                                             const Circle &circle,
                                             double radiusFactor);
-vector<Line> joinCollinearLines(vector<Line> &clockLines, double doubleEqualityInterval);
-vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines,
-                                                  int linesMergeAngle, double doubleEqualityInterval);
+vector<Line> clockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle, Circle &clockCircle);
 
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
                           const Circle &circle);
 
 ostream &operator<<(ostream &ostr, const TimeExtracted &time);
-double angleBetweenTwoLines(const Point2d &vec1, const Point2d &vec2);
+double angleBetweenTwoLines(const Point2d &vec1, const Point2d &vec2, bool toDegree = true);
 // https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
 SegmentsType segmentsAnalysis(Line &line1, Line &line2,
                               Point2d &intersectingPoint, double doubleEqualityInterval);
@@ -294,8 +292,7 @@ vector<Line> getPointerLines(Mat &result, ProgramData &programData,
 
     cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after selectLinesCloseToCircleCenter" << endl;
 
-    mergedClockLines = lineOfSymmetryClockPointerLinesMerge(
-        mergedClockLines, DEFAULT_LINES_MERGE_ANGLE, clockCircle.radius  * programData.doubleEqualityIntervalRadiusPercentage / 100);
+    //mergedClockLines = clockPointerLinesMerge(mergedClockLines, DEFAULT_LINES_MERGE_ANGLE, circle);
 
     cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after lineOfSymmetryClockPointerLinesMerge" << endl;
 
@@ -346,13 +343,7 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
   return clockPointerLines;
 }
 
-vector<Line> lineOfSymmetryClockPointerLinesMerge(vector<Line> &clockLines,
-                                                  int linesMergeAngle, double doubleEqualityInterval) {
-  vector<Line> newClockLines = joinCollinearLines(clockLines, doubleEqualityInterval);
-  return newClockLines;
-}
-
-vector<Line> joinCollinearLines(vector<Line> &clockLines, double doubleEqualityInterval) {
+vector<Line> clockPointerLinesMerge(vector<Line> &clockLines, int linesMergeAngle, Circle &clockCircle) {
   vector<Line> result;
 
   size_t clockLinesSize = clockLines.size();
@@ -362,30 +353,34 @@ vector<Line> joinCollinearLines(vector<Line> &clockLines, double doubleEqualityI
 
   for (size_t x = 0; x < clockLinesSize - 1; x++) {
     Line l1 = clockLines[x];
-    bool l1CollinearWithSomeLine = false;
+
+    Point vec1 = calcLineVec(l1);
+
+    bool l1Merged = false;
     for (size_t y = x + 1; y < clockLinesSize; y++) {
       Line l2 = clockLines[y];
-      Point2d intersectingPoint;
-      SegmentsType segmentsType = segmentsAnalysis(l1, l2, intersectingPoint, doubleEqualityInterval);
-      cout << "line" << x << getDistinctColor(x, clockLinesSize) << ":" << "line" << y << getDistinctColor(y, clockLinesSize) << " - " << static_cast<int>(segmentsType) << endl;
 
-      switch (segmentsType) {
-        case SegmentsType::COLLINEAR_OVERLAPPING: {
-          l1CollinearWithSomeLine = true;
-          break;
+      Point vec2 = calcLineVec(l2);
+
+      double vec1Vec2Angle = angleBetweenTwoLines(vec1, vec2, false);
+      if (vec1Vec2Angle < linesMergeAngle) {
+        l1Merged = true;
+        double maxNorm = max(norm(vec1), norm(vec2));
+        double newLineAngle = vec1Vec2Angle/2;
+        auto newPointB = Point2d(maxNorm * cos(newLineAngle), maxNorm * sin(newLineAngle));
+        Line newLine(clockCircle.center, newPointB);
+        if (result.size() > x) {
+          result[x] = newLine;
+        } else {
+          result.push_back(newLine);
         }
-        case SegmentsType::COLLINEAR_DISJOINT: {
-          l1CollinearWithSomeLine = true;
-          break;
-        }
-        default: {}
       }
     }
-    if (!l1CollinearWithSomeLine) {
+    if (!l1Merged) {
+      result.push_back(l1);
     }
   }
-  // For testing
-  return clockLines;
+  return result;
 }
 
 TimeExtracted extractTime(const vector<Line> &mergedClockLines,
@@ -457,13 +452,18 @@ double clockWiseAngleBetweenTwoVectors(const Point2d &vec1,
   return (ang * 180.0) / M_PI;
 }
 
-// TODO: verefi is one of the norms is zero...
-double angleBetweenTwoLines(const Point2d &vec1, const Point2d &vec2) {
+// TODO: verify if one of the norms is zero...
+double angleBetweenTwoLines(const Point2d &vec1, const Point2d &vec2, bool toDegree) {
   if (vec1 == vec2) {
     return 0;
   }
   double ang = acos(vec1.dot(vec2) / (norm(vec1) * norm(vec2)));
-  return (ang * 180.0) / M_PI;
+
+  if (toDegree) {
+    return (ang * 180.0) / M_PI;
+  }
+
+  return ang;
 }
 
 SegmentsType segmentsAnalysis(Line &line1, Line &line2,
