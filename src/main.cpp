@@ -11,7 +11,7 @@ using namespace std;
 using namespace cv;
 
 // TODO : m.realease() in all Mat objects
-const string DEFAULT_IMAGE_PATH = "../data/clock3.JPG";
+const string DEFAULT_IMAGE_PATH = "../data/clock2.jpg";
 
 const string WINDOW_NAME = "Clock Time Detection";
 const string HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME =
@@ -168,8 +168,8 @@ void calcPointDisplacement(Point2d &start, Point2d &displacementVector,
                            double displacementFactor, Point2d &displacedPoint);
 double clockWiseAngleBetweenTwoVectors(const Point2d &vec1,
                                        const Point2d &vec2);
-int getHourFromAngleDeg(double angle);
-int getMinuteSecFromAngleDeg(double angle);
+double getHourFromAngleDeg(double angle);
+double getMinuteSecFromAngleDeg(double angle);
 void bgr2gray(Mat &src, Mat &dst);
 void gray2bgr(Mat &src, Mat &dst);
 Scalar getDistinctColor(size_t index, size_t numberOfDistinctColors);
@@ -197,42 +197,41 @@ void clockTimeDetector(int, void *rawProgramData) {
   if (circles.empty()) {
     return;
   }
-  Circle clockCircle = circles[0];
 
-  isolateClock(clockCircle, programData->origImg, programData->imgCropped);
-  bgr2gray(programData->imgCropped, programData->grayImageCropped);
+  for (auto &clockCircle : circles) {
+    isolateClock(clockCircle, programData->origImg, programData->imgCropped);
+    bgr2gray(programData->imgCropped, programData->grayImageCropped);
 
-  Mat display;
-  vector<Line> mergedClockLines =
-      getPointerLines(display, *programData, clockCircle);
-  gray2bgr(display, display);
+    Mat display;
+    vector<Line> mergedClockLines =
+        getPointerLines(display, *programData, clockCircle);
 
-  TimeExtracted hoursExtracted = extractTime(mergedClockLines, clockCircle);
+    if (mergedClockLines.size() >= 1 && mergedClockLines.size() <= 3) {
+      gray2bgr(display, display);
 
-  cout << endl <<  hoursExtracted << endl;
+      TimeExtracted hoursExtracted = extractTime(mergedClockLines, clockCircle);
 
-  cout << endl << "nergedClockLines.size() = " << mergedClockLines.size() << endl;
-  for (size_t i = 0; i < mergedClockLines.size(); ++i) {
-    auto &mergedClockLine = mergedClockLines[i];
-    Scalar lineColor = getDistinctColor(i, mergedClockLines.size());
-    cout << "line" << i << " - " << lineColor << endl;
-    line(display, mergedClockLine.a, mergedClockLine.b, lineColor, 3, LINE_AA);
-  }
+      cout << endl << hoursExtracted << endl;
 
-  Point2d limitPoint;
-  limitPoint.x = clockCircle.center.x;
-  limitPoint.y = clockCircle.center.y - clockCircle.radius;
-  Line midNightLine = Line(clockCircle.center, limitPoint);
-  line(display, midNightLine.a, midNightLine.b, Scalar(0, 255, 255), 3,
-       LINE_AA);
+      cout << endl << "nergedClockLines.size() = " << mergedClockLines.size() << endl;
+      for (size_t i = 0; i < mergedClockLines.size(); ++i) {
+        auto &mergedClockLine = mergedClockLines[i];
+        Scalar lineColor = getDistinctColor(i, mergedClockLines.size());
+        cout << "line" << i << " - " << lineColor << endl;
+        line(display, mergedClockLine.a, mergedClockLine.b, lineColor, 3, LINE_AA);
+      }
 
-  imshow(WINDOW_NAME, display);
+      Point2d limitPoint;
+      limitPoint.x = clockCircle.center.x;
+      limitPoint.y = clockCircle.center.y - clockCircle.radius;
+      Line midNightLine = Line(clockCircle.center, limitPoint);
+      line(display, midNightLine.a, midNightLine.b, Scalar(0, 255, 255), 3,
+           LINE_AA);
 
-  if (mergedClockLines.size() == 2) {
-    Point2d vec0 = calcLineVec(mergedClockLines[0]);
-    Point2d vec1 = calcLineVec(mergedClockLines[1]);
-    cout << "vec0: " << vec0 << ", vec1: " << vec1
-         << ",  ang: " << angleBetweenTwoLines(vec0, vec1) << endl;
+      imshow(WINDOW_NAME, display);
+
+      break;
+    }
   }
 }
 
@@ -288,6 +287,9 @@ vector<Circle> getCircles(ProgramData &programData) {
 		circles.push_back(Circle(raw_circle));
 	}
 	cout << "circles " << circles.size() << endl;
+
+    std::sort(circles.begin(), circles.end(), [](Circle const &a, Circle const &b) -> bool
+    { return a.radius > b.radius; } );
 	return circles;
 }
 
@@ -462,26 +464,45 @@ TimeExtracted extractTime(const vector<Line> &mergedClockLines,
 
     // compare sizes the bigger is the minute pointer and the other de hour
     // pointer
-    TimeExtracted time;
     double size_vec_1 = norm(vecPointer_1);
     double size_vec_2 = norm(vecPointer_2);
 
-    time.hour = getHourFromAngleDeg(size_vec_1 > size_vec_2 ? ang_2 : ang_1);
-    time.minute = getMinuteSecFromAngleDeg(size_vec_1 > size_vec_2 ? ang_1 : ang_2);
+    double approximateHour = getHourFromAngleDeg(size_vec_1 > size_vec_2 ? ang_2 : ang_1);
+    double approximateMinute = getMinuteSecFromAngleDeg(size_vec_1 > size_vec_2 ? ang_1 : ang_2);
+
+    double hourDecimalPart = approximateHour - static_cast<int>(approximateHour);
+    double minutePercentage = approximateMinute / 60.0;
+
+    TimeExtracted time (static_cast<int>(approximateHour), static_cast<int>(approximateMinute));
+
+    if (hourDecimalPart <= 0.15 && minutePercentage > 0.75) {
+      time.hour = static_cast<int>(approximateHour) - 1;
+    } else if (hourDecimalPart > 0.85 && minutePercentage < 0.25) {
+      time.hour = (static_cast<int>(approximateHour) + 1) % 12;
+    }
+
+    if (time.hour == 0) {
+      time.hour = 12;
+    }
+
     return time;
   }
 
   // return value of only one pointer by default (clock pointer are overlaped)
-  return TimeExtracted(getHourFromAngleDeg(ang_1), getMinuteSecFromAngleDeg(ang_1));
+  int hour = static_cast<int>(getHourFromAngleDeg(ang_1));
+  if (hour == 0) {
+    hour = 12;
+  }
+  return TimeExtracted(hour, static_cast<int>(getMinuteSecFromAngleDeg(ang_1)));
 }
 
 // TODO: define for hours and degree
-int getHourFromAngleDeg(double angle) {
-  return static_cast<int>((angle * 12.0) / 360.0);
+double getHourFromAngleDeg(double angle) {
+  return angle * 12.0 / 360.0;
 }
 
-int getMinuteSecFromAngleDeg(double angle) {
-  return static_cast<int>((angle * 60.0) / 360.0);
+double getMinuteSecFromAngleDeg(double angle) {
+  return angle * 60.0 / 360.0;
 }
 
 ostream &operator<<(ostream &ostr, const TimeExtracted &time) {
