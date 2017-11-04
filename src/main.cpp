@@ -11,7 +11,7 @@ using namespace std;
 using namespace cv;
 
 // TODO : m.realease() in all Mat objects
-const string DEFAULT_IMAGE_PATH = "../data/clock2.jpg";
+const string DEFAULT_IMAGE_PATH = "../data/clock3.JPG";
 
 const string WINDOW_NAME = "Clock Time Detection";
 const string HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME =
@@ -372,10 +372,10 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
     Point2d vec1 = line.a - circle.center;
     Point2d vec2 = line.b - circle.center;
 
-    if (norm(vec1) <= clock_radius_limit && norm(vec2) > clock_radius_limit) {
+    if (norm(vec1) <= clock_radius_limit) {
       clockPointerLines.push_back(line);
     }
-    if (norm(vec2) <= clock_radius_limit && norm(vec1) > clock_radius_limit) {
+    if (norm(vec2) <= clock_radius_limit) {
       swapPoints(line);
       clockPointerLines.push_back(line);
     }
@@ -397,6 +397,9 @@ vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAn
     double maxNorm = norm(l1.b - clockCircle.center);
     double counter = 1.0; 
     Point2d vectorRes = vec1;
+    double vec1Angle = atan2(vec1.y, vec1.x);
+    double sumCos = cos(vec1Angle);
+    double sumSin = sin(vec1Angle);
     for (size_t y = x + 1; y < clockLines.size(); y++) {
       Line l2 = clockLines[y];
 
@@ -405,6 +408,9 @@ vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAn
       double vec1Vec2Angle = angleBetweenTwoLines(vec1, vec2, false);
       cout << x << " - " << vec1Vec2Angle << " - " << linesMergeAngle << endl;
       if (vec1Vec2Angle < linesMergeAngle) {
+        double vec2Angle = atan2(vec2.y, vec2.x);
+        sumCos += cos(vec2Angle);
+        sumSin += sin(vec2Angle);
         cout << x << " - joined " << endl;
         maxNorm = max(maxNorm, norm(l2.b - clockCircle.center));
         vectorRes += vec2;
@@ -416,10 +422,13 @@ vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAn
         cout << x << " - passed " << endl;
       }
     }
-    Point2d avgVec = (vectorRes / counter);
-    Point2d avgVecBigger = avgVec * (maxNorm / norm(avgVec));
 
-    Line clockAvgPointer(clockCircle.center, clockCircle.center + avgVecBigger);
+    double midAngle = atan2(sumSin, sumCos);
+    cout << "midAngle: " << midAngle << " sumCos " << sumCos << " sumSin " << sumSin << endl;
+    Point2d directionVector = Point2d(cos(midAngle), sin(midAngle)) * maxNorm;
+    Point2d newPointB =  directionVector + clockCircle.center;
+
+    Line clockAvgPointer(clockCircle.center, newPointB);
     result.push_back(clockAvgPointer);
     if (clockLines.size() == 0)
       break;
