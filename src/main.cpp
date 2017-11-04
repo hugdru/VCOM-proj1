@@ -11,7 +11,7 @@ using namespace std;
 using namespace cv;
 
 // TODO : m.realease() in all Mat objects
-const string DEFAULT_IMAGE_PATH = "../data/clock3.JPG";
+const string DEFAULT_IMAGE_PATH = "../data/clock2.jpg";
 
 const string WINDOW_NAME = "Clock Time Detection";
 const string HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME =
@@ -56,7 +56,7 @@ constexpr int DEFAULT_CANNY_APERTURE_SIZE = 3;
 
 constexpr double DEFAULT_LINES_MERGE_ANGLE = 0.0874f; //5º rad, temp to sec 0.045f
 
-constexpr double DEFAULT_LINES_SELECTION_RADIUS_FACTOR = 0.2;
+constexpr double DEFAULT_LINES_SELECTION_RADIUS_FACTOR = 0.5;
 
 constexpr int MAX_DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE = 100;
 constexpr int DEFAULT_DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE = 15;
@@ -394,8 +394,7 @@ vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAn
     Line l1 = clockLines[x];
 
     Point2d vec1 = calcLineVec(l1);
-
-    double maxNorm = norm(vec1);
+    double maxNorm = norm(l1.b - clockCircle.center);
     double counter = 1.0; 
     Point2d vectorRes = vec1;
     for (size_t y = x + 1; y < clockLines.size(); y++) {
@@ -407,7 +406,7 @@ vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAn
       cout << x << " - " << vec1Vec2Angle << " - " << linesMergeAngle << endl;
       if (vec1Vec2Angle < linesMergeAngle) {
         cout << x << " - joined " << endl;
-        maxNorm = max(maxNorm, norm(vec2));
+        maxNorm = max(maxNorm, norm(l2.b - clockCircle.center));
         vectorRes += vec2;
         counter+=1.0f;
         
