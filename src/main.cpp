@@ -372,10 +372,10 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
     Point2d vec1 = line.a - circle.center;
     Point2d vec2 = line.b - circle.center;
 
-    if (norm(vec1) <= clock_radius_limit) {
+    if (norm(vec1) <= clock_radius_limit && norm(vec2) > clock_radius_limit) {
       clockPointerLines.push_back(line);
     }
-    if (norm(vec2) <= clock_radius_limit) {
+    if (norm(vec2) <= clock_radius_limit && norm(vec1) > clock_radius_limit) {
       swapPoints(line);
       clockPointerLines.push_back(line);
     }
