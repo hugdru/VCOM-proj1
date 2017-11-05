@@ -11,7 +11,7 @@ using namespace std;
 using namespace cv;
 
 // TODO : m.realease() in all Mat objects
-const string DEFAULT_IMAGE_PATH = "../data/clock12.jpeg";
+const string DEFAULT_IMAGE_PATH = "../data/Clock09.jpg";
 
 const string WINDOW_NAME = "Clock Time Detection";
 const string HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME =
@@ -56,7 +56,7 @@ constexpr int DEFAULT_CANNY_APERTURE_SIZE = 3;
 
 constexpr double DEFAULT_LINES_MERGE_ANGLE = 0.0874f; //5º rad, temp to sec 0.045f
 
-constexpr double DEFAULT_LINES_SELECTION_RADIUS_FACTOR = 0.5;
+constexpr double DEFAULT_LINES_SELECTION_RADIUS_FACTOR = 0.25;
 
 constexpr int MAX_DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE = 100;
 constexpr int DEFAULT_DOUBLE_EQUALITY_INTERVAL_RADIUS_PERCENTAGE = 15;
@@ -231,7 +231,12 @@ void clockTimeDetector(int, void *rawProgramData) {
       limitPoint.y = clockCircle.center.y - clockCircle.radius;
       Line midNightLine = Line(clockCircle.center, limitPoint);
       line(display, midNightLine.a, midNightLine.b, Scalar(0, 255, 255), 3,
-           LINE_AA);
+		   LINE_AA);
+		
+		// circle center
+		circle(display, clockCircle.center, 3, Scalar(0, 255, 0), -1, 8, 0);
+		// circle outline
+		circle(display, clockCircle.center, DEFAULT_LINES_SELECTION_RADIUS_FACTOR * clockCircle.radius, Scalar(0, 0, 255), 3, 8, 0);
 
       imshow(WINDOW_NAME, display);
 
@@ -360,7 +365,7 @@ vector<Line> getPointerLines(Mat &result,Mat &redMask, ProgramData &programData,
 		cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after lineOfSymmetryClockPointerLinesMerge" << endl;
 
 		if (rawLines.size() >= 2) break;
-	} while (++tries < 5);
+	} while (++tries < 25);
 
 	return mergedClockLines;
 }
@@ -409,8 +414,8 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
 vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAngle, const Circle &clockCircle) {
 	vector<Line> result;
 
-	if (clockLines.size() == 0) {
-		return result;
+	if (clockLines.size() == 0 || clockLines.size() == 1) {
+		return clockLines;
 	}
 
 	for (size_t x = 0; x < clockLines.size() - 1; x++) {
@@ -517,17 +522,20 @@ int extractSecound(Mat &SecPointerMask,const Circle &clockCircle, ProgramData &p
 
 	Canny(result, result, programData.cannyThreshold1,
 		programData.cannyThreshold2, programData.cannyApertureSize);
-
+	
+		imshow("red mask filtered", SecPointerMask);
 	vector<Vec4d> rawLines;
+	
 	vector<Line> mergedClockLines;
 	int tries = 0;
 	cout << endl;
+	int threshold = DEFAULT_HOUGH_LINES_P_THRESHOLD;
 	do {
-		programData.houghLinesPThreshold =
-			(programData.houghLinesPThreshold + tries * 5) %
+		threshold =
+			(threshold + tries * 5) %
 			MAX_HOUGH_LINES_P_THRESHOLD;
 		HoughLinesP(result, rawLines, 1, CV_PI / 180,
-			programData.houghLinesPThreshold, 30, 10);
+			threshold, 30, 10);
 
 		cout << "try: " << tries << " extracting secound pointers, rawLines.size() = " << rawLines.size() << endl;
 
@@ -547,7 +555,7 @@ int extractSecound(Mat &SecPointerMask,const Circle &clockCircle, ProgramData &p
 		cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after lines close to center in secound pointer mask" << endl;
 
 		if (rawLines.size() >= 1) break;
-	} while (++tries < 5);
+	} while (++tries < 25);
 
 	if (mergedClockLines.size() <= 0) 
 		return 0;
