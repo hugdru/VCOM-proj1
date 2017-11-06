@@ -50,7 +50,7 @@ constexpr int DEFAULT_BILATERAL_SIGMA_SPACE = 50;
 
 constexpr int MAX_CANNY_TRESHOLD = 255;
 constexpr int DEFAULT_CANNY_THRESHOLD1 = 50;
-constexpr int DEFAULT_CANNY_THRESHOLD2 = DEFAULT_CANNY_THRESHOLD1 * 4;
+constexpr int DEFAULT_CANNY_THRESHOLD2 = 120;
 constexpr int MAX_CANNY_APERTURE_SIZE = 7;
 constexpr int DEFAULT_CANNY_APERTURE_SIZE = 3;
 
@@ -420,6 +420,17 @@ vector<Line> iterativeLinesSearch(ProgramData &programData, const Circle &clockC
 
     mergedClockLines = selectLinesCloseToCircleCenter(
         lines, clockCircle, DEFAULT_LINES_SELECTION_RADIUS_FACTOR);
+
+    Mat linesCloseMat;
+    image.copyTo(linesCloseMat);
+    gray2bgr(linesCloseMat, linesCloseMat);
+
+    for (size_t i = 0; i < mergedClockLines.size(); ++i) {
+      Line mergedLine = mergedClockLines[i];
+      line(linesCloseMat, mergedLine.a, mergedLine.b, getDistinctColor(i, mergedClockLines.size()), 3, LINE_AA);
+    }
+
+    imageShow("Lines after selectLinesCloseToCircleCenter", linesCloseMat);
 
     cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after selectLinesCloseToCircleCenter" << endl;
 
