@@ -11,7 +11,7 @@ using namespace std;
 using namespace cv;
 
 // TODO : m.realease() in all Mat objects
-const string DEFAULT_IMAGE_PATH = "../data/watch.jpg";
+const string DEFAULT_IMAGE_PATH = "../data/clock22.jpg";
 
 const string WINDOW_NAME = "Clock Time Detection";
 const string HOUGH_CIRCLES_CANNY_THRESHOLD_TRACKBAR_NAME =
@@ -401,6 +401,7 @@ TimeLines getPointerLines(Mat &result, ProgramData &programData,
 vector<Line> iterativeLinesSearch(ProgramData &programData, const Circle &clockCircle, Mat &image, size_t numberOfLinesToBreak) {
   vector<Vec4d> rawLines;
   vector<Line> mergedClockLines;
+  vector<Line> bestMergedClockLinesYet;
   int tries = 0;
   cout << endl;
   do {
@@ -438,13 +439,16 @@ vector<Line> iterativeLinesSearch(ProgramData &programData, const Circle &clockC
 
     cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after clockPointerLinesMerge" << endl;
 
+    if (mergedClockLines.size() > bestMergedClockLinesYet.size()) {
+      bestMergedClockLinesYet = mergedClockLines;
+    }
     if (mergedClockLines.size() >= numberOfLinesToBreak) break;
   } while (++tries < 50);
 
-  std::sort(mergedClockLines.begin(), mergedClockLines.end(), [](Line const &l1, Line const &l2) -> bool
+  std::sort(bestMergedClockLinesYet.begin(), bestMergedClockLinesYet.end(), [](Line const &l1, Line const &l2) -> bool
   { return norm(l1.b - l1.a) > norm(l2.b - l2.a); } );
 
-  return mergedClockLines;
+  return bestMergedClockLinesYet;
 }
 
 void isolateClock(Circle &clockCircle, Mat &image, Mat &clock) {
@@ -598,6 +602,8 @@ TimeExtracted extractTime(TimeLines &timeLines,
 
     if (hourInt == 0) {
       hourInt = 12;
+    } else if (hourInt == -1) {
+      hourInt = 11;
     }
 
   return TimeExtracted(hourInt, minuteInt, secondInt);
