@@ -246,7 +246,7 @@ void clockTimeDetector(int, void *rawProgramData) {
       line(display, timeLines.minute.a, timeLines.minute.b, Scalar(0, 255, 0), 3, LINE_AA);
 
       if (timeLines.timesLinesType == TimeLinesType::HOUR_MINUTE_SECOND) {
-        line(display, timeLines.minute.a, timeLines.minute.b, Scalar(0, 0, 255), 3, LINE_AA);
+        line(display, timeLines.second.a, timeLines.second.b, Scalar(0, 0, 255), 3, LINE_AA);
       }
 
       Point2d limitPoint;
@@ -489,8 +489,6 @@ vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAn
 
     Point2d vec1 = calcLineVec(l1);
     double maxNorm = norm(l1.b - clockCircle.center);
-    int counter = 1;
-    Point2d vectorRes = vec1;
     double vec1Angle = atan2(vec1.y, vec1.x);
     double sumCos = cos(vec1Angle);
     double sumSin = sin(vec1Angle);
@@ -507,15 +505,15 @@ vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAn
         sumSin += sin(vec2Angle);
         cout << x << " - joined " << endl;
         maxNorm = max(maxNorm, norm(l2.b - clockCircle.center));
-        vectorRes += vec2;
-        counter++;
 
         clockLines.erase(clockLines.begin() + y);
         y--;
       }else{
         cout << x << " - passed " << endl;
       }
-    }
+	}
+	clockLines.erase(clockLines.begin() + x);
+	x--;
 
     double midAngle = atan2(sumSin, sumCos);
     cout << "midAngle: " << midAngle << " sumCos " << sumCos << " sumSin " << sumSin << endl;
@@ -526,6 +524,18 @@ vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAn
     result.push_back(clockAvgPointer);
     if (clockLines.empty())
       break;
+  }
+  if(clockLines.size() == 1){
+		Line l1 = clockLines[0];
+		Point2d vec1 = calcLineVec(l1);
+		double maxNorm = norm(l1.b - clockCircle.center);
+		double vec1Angle = atan2(vec1.y, vec1.x);
+		cout << "last Pointer: " << vec1Angle << endl;
+		Point2d directionVector = Point2d(cos(vec1Angle), sin(vec1Angle)) * maxNorm;
+		Point2d newPointB = directionVector + clockCircle.center;
+	
+		Line clockAvgPointer(clockCircle.center, newPointB);
+		result.push_back(clockAvgPointer);
   }
   return result;
 }
