@@ -477,49 +477,57 @@ vector<Line> selectLinesCloseToCircleCenter(vector<Line> &lines,
 	return clockPointerLines;
 }
 
-vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAngle, const Circle &clockCircle) {
-	vector<Line> result;
+vector<Line> clockPointerLinesMerge(vector<Line> clockLines, double linesMergeAngle,const Circle &clockCircle) {
+  vector<Line> result;
 
-	if (clockLines.size() == 0 || clockLines.size() == 1) {
-		return clockLines;
-	}
+  if (clockLines.empty() || clockLines.size() == 1) {
+    return clockLines;
+  }
 
-	for (size_t x = 0; x < clockLines.size() - 1; x++) {
-		Line l1 = clockLines[x];
+  for (size_t x = 0; x < clockLines.size() - 1; x++) {
+    Line l1 = clockLines[x];
 
-		Point2d vec1 = calcLineVec(l1);
-		double maxNorm = norm(l1.b - clockCircle.center);
-		double counter = 1.0;
-		Point2d vectorRes = vec1;
-		for (size_t y = x + 1; y < clockLines.size(); y++) {
-			Line l2 = clockLines[y];
+    Point2d vec1 = calcLineVec(l1);
+    double maxNorm = norm(l1.b - clockCircle.center);
+    int counter = 1;
+    Point2d vectorRes = vec1;
+    double vec1Angle = atan2(vec1.y, vec1.x);
+    double sumCos = cos(vec1Angle);
+    double sumSin = sin(vec1Angle);
+    for (size_t y = x + 1; y < clockLines.size(); y++) {
+      Line l2 = clockLines[y];
 
-			Point2d vec2 = calcLineVec(l2);
+      Point2d vec2 = calcLineVec(l2);
 
-			double vec1Vec2Angle = angleBetweenTwoLines(vec1, vec2, false);
-			cout << x << " - " << vec1Vec2Angle << " - " << linesMergeAngle << endl;
-			if (vec1Vec2Angle < linesMergeAngle) {
-				cout << x << " - joined " << endl;
-				maxNorm = max(maxNorm, norm(l2.b - clockCircle.center));
-				vectorRes += vec2;
-				counter += 1.0f;
+      double vec1Vec2Angle = angleBetweenTwoLines(vec1, vec2, false);
+      cout << x << " - " << vec1Vec2Angle << " - " << linesMergeAngle << endl;
+      if (vec1Vec2Angle < linesMergeAngle) {
+        double vec2Angle = atan2(vec2.y, vec2.x);
+        sumCos += cos(vec2Angle);
+        sumSin += sin(vec2Angle);
+        cout << x << " - joined " << endl;
+        maxNorm = max(maxNorm, norm(l2.b - clockCircle.center));
+        vectorRes += vec2;
+        counter++;
 
-				clockLines.erase(clockLines.begin() + y);
-				y--;
-			}
-			else {
-				cout << x << " - passed " << endl;
-			}
-		}
-		Point2d avgVec = (vectorRes / counter);
-		Point2d avgVecBigger = avgVec * (maxNorm / norm(avgVec));
+        clockLines.erase(clockLines.begin() + y);
+        y--;
+      }else{
+        cout << x << " - passed " << endl;
+      }
+    }
 
-		Line clockAvgPointer(clockCircle.center, clockCircle.center + avgVecBigger);
-		result.push_back(clockAvgPointer);
-		if (clockLines.size() == 0)
-			break;
-	}
-	return result;
+    double midAngle = atan2(sumSin, sumCos);
+    cout << "midAngle: " << midAngle << " sumCos " << sumCos << " sumSin " << sumSin << endl;
+    Point2d directionVector = Point2d(cos(midAngle), sin(midAngle)) * maxNorm;
+    Point2d newPointB =  directionVector + clockCircle.center;
+
+    Line clockAvgPointer(clockCircle.center, newPointB);
+    result.push_back(clockAvgPointer);
+    if (clockLines.empty())
+      break;
+  }
+  return result;
 }
 
 TimeExtracted extractTime(TimeLines &timeLines,
@@ -572,68 +580,6 @@ TimeExtracted extractTime(TimeLines &timeLines,
     }
 
   return TimeExtracted(hourInt, minuteInt, secondInt);
-}
-
-int extractSecound(Mat &SecPointerMask,const Circle &clockCircle, ProgramData &programData){
-	Mat result;
-	bilateralFilter(SecPointerMask, result,
-		programData.bilateralSigmaColor,
-		programData.bilateralSigmaSpace, BORDER_DEFAULT);
-
-	Canny(result, result, programData.cannyThreshold1,
-		programData.cannyThreshold2, programData.cannyApertureSize);
-	
-		imshow("red mask filtered", SecPointerMask);
-	vector<Vec4d> rawLines;
-	
-	vector<Line> mergedClockLines;
-	int tries = 0;
-	cout << endl;
-	int threshold = DEFAULT_HOUGH_LINES_P_THRESHOLD;
-	do {
-		threshold =
-			(threshold + tries * 5) %
-			MAX_HOUGH_LINES_P_THRESHOLD;
-		HoughLinesP(result, rawLines, 1, CV_PI / 180,
-			threshold, 30, 10);
-
-		cout << "try: " << tries << " extracting secound pointers, rawLines.size() = " << rawLines.size() << endl;
-
-		vector<Line> lines;
-
-		for (auto &rawLine : rawLines) {
-			lines.push_back(Line(rawLine));
-		}
-
-		mergedClockLines = selectLinesCloseToCircleCenter(
-			lines, clockCircle, DEFAULT_LINES_SELECTION_RADIUS_FACTOR);
-
-		cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after lines close to center in secound pointer mask" << endl;
-
-		mergedClockLines = clockPointerLinesMerge(mergedClockLines, DEFAULT_LINES_MERGE_ANGLE, clockCircle);
-
-		cout << "mergedClockLines.size() = " << mergedClockLines.size() << ", after lines close to center in secound pointer mask" << endl;
-
-		if (rawLines.size() >= 1) break;
-	} while (++tries < 25);
-
-	if (mergedClockLines.size() <= 0) 
-		return 0;
-	
-	// determine mid night clock pointer to help determine the corret hour and
-	// minute
-	Point2d limitPoint;
-	limitPoint.x = clockCircle.center.x;
-	limitPoint.y = clockCircle.center.y - clockCircle.radius;
-	Line midNightLine = Line(clockCircle.center, limitPoint);
-	Point2d vecReference = midNightLine.b - midNightLine.a;
-	
-	// get the first clock pointer
-	Line pointer_1 = mergedClockLines[0];
-	Point2d vecPointer_1 = pointer_1.b - pointer_1.a;
-	double ang_1 = clockWiseAngleBetweenTwoVectors(vecReference, vecPointer_1);
-
-	return static_cast<int>(getMinuteSecFromAngleDeg(ang_1));
 }
 
 // TODO: define for hours and degree
