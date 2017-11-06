@@ -7,6 +7,8 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "clock.hpp"
+
 using namespace std;
 using namespace cv;
 
@@ -149,7 +151,7 @@ enum class SegmentsType {
 
 string readCommandLine(int argc, char **argv, string const &defaultImagePath);
 
-void readImage(string &imagePath, ProgramData &programData);
+void readImage(Mat &image, ProgramData &programData);
 
 void buildGui(TrackbarCallback callback, ProgramData &programData);
 
@@ -209,14 +211,12 @@ template <class T>
 constexpr const T &clamp(const T &v, const T &lo, const T &hi);
 Mat calculateRedMask(Mat input);
 
-int main(int argc, char **argv) {
-  string imagePath = readCommandLine(argc, argv, DEFAULT_IMAGE_PATH);
+void initiate(Mat &guiImage) {
   ProgramData programData = ProgramData();
-  readImage(imagePath, programData);
+  readImage(guiImage, programData);
   buildGui(clockTimeDetector, programData);
   clockTimeDetector(0, &programData);
   waitKey(0);
-  return 0;
 }
 
 void clockTimeDetector(int, void *rawProgramData) {
@@ -769,16 +769,8 @@ double medianHist(Mat grayImage) {
   return med;
 }
 
-string readCommandLine(int argc, char **argv, string const &defaultImagePath) {
-  string imagePath = defaultImagePath;
-  if (argc > 1) {
-    imagePath = argv[1];
-  }
-  return imagePath;
-}
-
-void readImage(string &imagePath, ProgramData &programData) {
-  programData.origImg = imread(imagePath, IMREAD_COLOR);
+void readImage(Mat &image, ProgramData &programData) {
+  image.copyTo(programData.origImg);
   bgr2gray(programData.origImg, programData.grayImage);
 
   if (programData.origImg.empty()) {

@@ -2,14 +2,11 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <iostream>
 #include <fstream>
 #include <string>
 #include <cstdlib>
 
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/imgproc.hpp>
+#include "clock.hpp"
 
 using namespace cv;
 using namespace std;
@@ -17,7 +14,7 @@ using namespace std;
 
 const string LOGO_PATH = "../data/logo.jpg";
 
-const int DEFAULT_CAMERA = 1;
+const int DEFAULT_CAMERA = 0y;
 
 const int NO_OPER = -1;
 const int UPLOAD_PHOTO_OPER = 0;
@@ -50,7 +47,7 @@ void askForFile() {
 
 		if (!input.empty()) {
 			imshow("Image", input);
-			input = 0; //accept new input
+			state = 0;
 			break;
 		}
 		cout << "Invalid file. Please enter a valid input file name> " << flush;
@@ -97,8 +94,8 @@ int TakeOneFrame()
 }
 
 int calculateClock() {
-
 	state = 0; //accept new input
+    initiate(input);
 	return 0;
 }
 
@@ -109,7 +106,8 @@ void callBackFunc(int event, int x, int y, int flags, void* userdata)
 		if (buttonUpload.contains(Point(x, y)))
 		{
 			cout << "Clicked Upload!" << endl;
-			rectangle(canvas(buttonUpload), buttonUpload, Scalar(0, 0, 255), 2);
+			auto buttonUploadCanvas = canvas(buttonUpload);
+			rectangle(buttonUploadCanvas, buttonUpload, Scalar(0, 0, 255), 2);
 			oper = UPLOAD_PHOTO_OPER;
 			state = 1;
 		}
@@ -117,7 +115,8 @@ void callBackFunc(int event, int x, int y, int flags, void* userdata)
 		if (buttonVideo.contains(Point(x, y)))
 		{
 			cout << "Clicked Video!" << endl;
-			rectangle(canvas(buttonVideo), buttonVideo, Scalar(0, 0, 255), 2);
+			auto buttonVideoCanvas = canvas(buttonVideo);
+			rectangle(buttonVideoCanvas, buttonVideo, Scalar(0, 0, 255), 2);
 			oper = TAKE_VIDEO_PHOTO_OPER;
 			state = 1;
 
@@ -126,7 +125,8 @@ void callBackFunc(int event, int x, int y, int flags, void* userdata)
 		if (buttonClock.contains(Point(x, y)))
 		{
 			cout << "Clicked Clock!" << endl;
-			rectangle(canvas(buttonClock), buttonClock, Scalar(0, 0, 255), 2);
+			auto buttonClockCanvas = canvas(buttonClock);
+			rectangle(buttonClockCanvas, buttonClock, Scalar(0, 0, 255), 2);
 			oper = CALCULATE_CLOCK_OPER;
 			state = 1;
 
