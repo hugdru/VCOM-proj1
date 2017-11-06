@@ -14,7 +14,7 @@ using namespace std;
 
 const string LOGO_PATH = "../data/logo.jpg";
 
-const int DEFAULT_CAMERA = 0y;
+const int DEFAULT_CAMERA = 0;
 
 const int NO_OPER = -1;
 const int UPLOAD_PHOTO_OPER = 0;
