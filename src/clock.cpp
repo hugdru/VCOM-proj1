@@ -155,10 +155,6 @@ void readImage(Mat &image, ProgramData &programData);
 
 void buildGui(TrackbarCallback callback, ProgramData &programData);
 
-void createWindow(string windowName, int rows, int cols);
-
-void imageShow(string windowName, Mat &image);
-
 void clockTimeDetector(int, void *);
 
 vector<Circle> getCircles(ProgramData &programData);
@@ -266,7 +262,7 @@ void clockTimeDetector(int, void *rawProgramData) {
              DEFAULT_LINES_SELECTION_RADIUS_FACTOR * clockCircle.radius,
              Scalar(0, 0, 255), 3, 8, 0);
 
-      imshow(WINDOW_NAME, display);
+      imageShow(WINDOW_NAME, display);
 
       break;
     }
@@ -803,9 +799,9 @@ void buildGui(TrackbarCallback callback, ProgramData &programData) {
 }
 
 void createWindow(string windowName, int rows, int cols) {
-  if (rows > 600 || cols > 600) {
+  if (rows > 400 || cols > 400) {
     namedWindow(windowName, WINDOW_NORMAL);
-    resizeWindow(windowName, 600, 600);
+    resizeWindow(windowName, 400, 400);
   } else {
     namedWindow(windowName, WINDOW_AUTOSIZE);
   }

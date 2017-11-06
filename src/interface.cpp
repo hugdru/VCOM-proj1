@@ -11,7 +11,6 @@
 using namespace cv;
 using namespace std;
 
-
 const string LOGO_PATH = "../data/logo.jpg";
 
 const int DEFAULT_CAMERA = 0;
@@ -35,6 +34,11 @@ Rect buttonClock;
 
 Mat input;
 
+void askForFile();
+int TakeOneFrame();
+int calculateClock();
+void callBackFunc(int event, int x, int y, int , void* );
+
 void askForFile() {
 	ifstream infile;
 
@@ -46,7 +50,7 @@ void askForFile() {
 		input = imread(imagePath.c_str(), IMREAD_COLOR);
 
 		if (!input.empty()) {
-			imshow("Image", input);
+			imageShow("Image", input);
 			state = 0;
 			break;
 		}
@@ -70,9 +74,9 @@ int TakeOneFrame()
 	{
 		cap >> frame;
 		frame.copyTo(input);
-		imshow("Video", frame);
+		imageShow("Video Feed", frame);
 		if (char(waitKey(1)) == 'p') {
-			imshow("Image", input);
+			imageShow("Image", input);
 			bool retake = false;
 
 			while (!retake) {
@@ -99,7 +103,7 @@ int calculateClock() {
 	return 0;
 }
 
-void callBackFunc(int event, int x, int y, int flags, void* userdata)
+void callBackFunc(int event, int x, int y, int , void* )
 {
 	if (event == EVENT_LBUTTONDOWN)
 	{
@@ -173,13 +177,13 @@ int main()
 	// Draw the buttons
 	//--------------------------------------------------
 	canvas(buttonUpload) = Vec3b(200, 200, 200);
-	putText(canvas(buttonUpload), buttonUploadText, Point(buttonUpload.width*0.35, buttonUpload.height*0.7), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
+	putText(canvas(buttonUpload), buttonUploadText, Point2d(buttonUpload.width*0.35, buttonUpload.height*0.7), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
 
 	canvas(buttonVideo) = Vec3b(200, 200, 200);
-	putText(canvas(buttonVideo), buttonVideoText, Point(buttonVideo.width*0.35, buttonVideo.height*0.7), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
+	putText(canvas(buttonVideo), buttonVideoText, Point2d(buttonVideo.width*0.35, buttonVideo.height*0.7), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
 
 	canvas(buttonClock) = Vec3b(200, 200, 200);
-	putText(canvas(buttonClock), buttonClockText, Point(buttonClock.width*0.35, buttonClock.height*0.7), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
+	putText(canvas(buttonClock), buttonClockText, Point2d(buttonClock.width*0.35, buttonClock.height*0.7), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
 
 	//--------------------------------------------------
 
@@ -193,8 +197,8 @@ int main()
 	imshow(winName, canvas);
 
 	while (true) {
-		char key = (char)cv::waitKey(30);   // explicit cast
-		if (key == 27) break;                // break if `esc' key was pressed. 
+		char key = static_cast<char>(cv::waitKey(30));
+		if (key == 27) break;
 	}
 
 	return 0;
