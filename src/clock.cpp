@@ -238,37 +238,37 @@ void clockTimeDetector(int, void *rawProgramData) {
       TimeExtracted hoursExtracted = extractTime(timeLines, clockCircle);
 
       cout << endl << hoursExtracted << endl;
-      
-      
+
       line(display, timeLines.hour.a, timeLines.hour.b, Scalar(255, 0, 0), 3,
-      LINE_AA);
+           LINE_AA);
       line(display, timeLines.minute.a, timeLines.minute.b, Scalar(0, 255, 0),
-      3, LINE_AA);
-      
+           3, LINE_AA);
+
       if (timeLines.timesLinesType == TimeLinesType::HOUR_MINUTE_SECOND) {
         line(display, timeLines.second.a, timeLines.second.b, Scalar(0, 0, 255),
-        3, LINE_AA);
+             3, LINE_AA);
       }
-      
+
       Point2d limitPoint;
       limitPoint.x = clockCircle.center.x;
       limitPoint.y = clockCircle.center.y - clockCircle.radius;
       Line midNightLine = Line(clockCircle.center, limitPoint);
       line(display, midNightLine.a, midNightLine.b, Scalar(0, 255, 255), 3,
-      LINE_AA);
-      
+           LINE_AA);
+
       // circle center
       circle(display, clockCircle.center, 3, Scalar(0, 255, 0), -1, 8, 0);
       // circle outline
       circle(display, clockCircle.center,
-        DEFAULT_LINES_SELECTION_RADIUS_FACTOR * clockCircle.radius,
-        Scalar(0, 0, 255), 3, 8, 0);
-        
+             DEFAULT_LINES_SELECTION_RADIUS_FACTOR * clockCircle.radius,
+             Scalar(0, 0, 255), 3, 8, 0);
 
       stringstream ss;
       ss << hoursExtracted;
-      putText(display, ss.str() , cvPoint(display.rows * 0.025f, display.cols * 0.070f), 
-          CV_FONT_HERSHEY_SIMPLEX, ((double)display.rows) / 500.0f, cvScalar(0,0,255), ((double)display.rows) / 500.0f, CV_AA);
+      putText(display, ss.str(),
+              cvPoint(display.rows * 0.025f, display.cols * 0.070f),
+              CV_FONT_HERSHEY_SIMPLEX, ((double)display.rows) / 500.0f,
+              cvScalar(0, 0, 255), ((double)display.rows) / 500.0f, CV_AA);
       imageShow(WINDOW_NAME, display);
 
       break;
